@@ -46,7 +46,7 @@ export default function SettingsPage() {
   const userKey = user?.id ?? 'no-user';
 
   return (
-    <div className="flex flex-col md:flex-row h-full bg-softspace-950">
+    <div className="flex flex-col md:flex-row h-full bg-softspace-950 pt-safe">
       <div className="w-full md:w-1/3 md:max-w-xs bg-softspace-900 border-b md:border-b-0 md:border-r border-softspace-800 p-2 md:p-4 flex flex-row md:flex-col items-center md:items-end overflow-x-auto no-scrollbar shrink-0">
         <div className="flex md:block w-full md:max-w-[200px] gap-2 md:gap-0 md:space-y-2">
           <div className="flex items-center gap-2 mb-2">
@@ -90,7 +90,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="flex-1 p-4 md:p-10 overflow-y-auto">
+      <div className="flex-1 p-4 md:p-10 overflow-y-auto pb-safe">
         <div className="max-w-2xl mx-auto md:mx-0">
           <SettingsContent
             key={userKey}

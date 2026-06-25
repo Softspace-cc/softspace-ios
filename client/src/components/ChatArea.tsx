@@ -1466,8 +1466,8 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
           />
         )}
         <div className={`
-          absolute md:relative z-40 h-full transition-transform duration-200 ease-in-out shrink-0
-          ${mobileChannelSidebarOpen ? 'translate-x-0' : '-translate-x-full md:transform-none'}
+          absolute left-0 top-0 z-40 h-full transition-transform duration-200 ease-in-out shrink-0 w-60 md:relative md:translate-x-0 md:w-auto
+          ${mobileChannelSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}>
           <ChannelSidebar
             server={serverInfo}
@@ -1488,7 +1488,7 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
           />
         </div>
         <div className="flex-1 bg-softspace-950 flex flex-col min-w-0 h-full">
-          <div className="h-14 border-b border-softspace-800 flex items-center px-4 md:px-6 gap-3 shadow-sm shrink-0 z-10 relative">
+          <div className="h-safe-header border-b border-softspace-800 flex items-center px-4 md:px-6 gap-3 shadow-sm shrink-0 z-10 relative">
             <div className="md:hidden flex items-center gap-2 mr-2">
               <button onClick={() => setMobileSidebarOpen(true)} className="p-1.5 text-softspace-400 hover:text-softspace-100 rounded-lg">
                 <Menu size={20} />
@@ -1549,8 +1549,8 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
             />
           )}
           <div className={`
-            absolute md:relative z-40 h-full transition-transform duration-200 ease-in-out shrink-0
-            ${mobileChannelSidebarOpen ? 'translate-x-0' : '-translate-x-full md:transform-none'}
+            absolute left-0 top-0 z-40 h-full transition-transform duration-200 ease-in-out shrink-0 w-60 md:relative md:translate-x-0 md:w-auto
+            ${mobileChannelSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           `}>
             <ChannelSidebar
               server={serverInfo}
@@ -1699,7 +1699,7 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
             <p className="text-lg font-semibold text-softspace-100">{t('drop_files_to_upload')}</p>
           </div>
         )}
-        <div className="h-14 border-b border-softspace-800 flex items-center px-4 md:px-6 gap-2 md:gap-3 shadow-sm shrink-0">
+        <div className="h-safe-header border-b border-softspace-800 flex items-center px-4 md:px-6 gap-2 md:gap-3 shadow-sm shrink-0">
           <div className="md:hidden flex items-center gap-2 mr-1">
             <button onClick={() => setMobileSidebarOpen(true)} className="p-1.5 text-softspace-400 hover:text-softspace-100 rounded-lg">
               <Menu size={20} />
@@ -2046,7 +2046,7 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
         )}
 
         {/* Input */}
-        <div className="px-4 pb-4 shrink-0">
+        <div className="px-4 pb-4 pb-safe shrink-0">
           <form
             onSubmit={handleSendMessage}
             className={`bg-softspace-900 rounded-2xl flex items-end px-3 py-2 gap-2 border border-softspace-800 transition-colors ${canSendMessages ? 'focus-within:border-softspace-600' : 'opacity-50 cursor-not-allowed'
@@ -2192,8 +2192,8 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
             />
           )}
           <div className={`
-            absolute right-0 md:relative z-40 h-full min-h-0 overflow-hidden transition-transform duration-200 ease-in-out shrink-0
-            ${mobileMemberListOpen ? 'translate-x-0' : 'translate-x-full md:transform-none'}
+            absolute right-0 top-0 z-40 h-full min-h-0 overflow-hidden transition-transform duration-200 ease-in-out shrink-0 w-60 md:relative md:translate-x-0 md:w-auto
+            ${mobileMemberListOpen ? 'translate-x-0' : 'translate-x-full'}
           `} style={{ height: '100%' }}>
             <MemberList
               members={members}

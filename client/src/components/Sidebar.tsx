@@ -152,7 +152,7 @@ export default function Sidebar() {
 
   return (
     <>
-      <div className="w-20 bg-softspace-950 flex flex-col items-center py-4 space-y-4 flex-shrink-0 z-10 relative h-full overflow-y-auto [&::-webkit-scrollbar]:!hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="w-20 bg-softspace-950 flex flex-col items-center pt-safe pb-safe py-4 space-y-4 flex-shrink-0 z-10 relative h-full overflow-y-auto [&::-webkit-scrollbar]:!hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <Link
           to="/app"
           onClick={() => setMobileSidebarOpen(false)}

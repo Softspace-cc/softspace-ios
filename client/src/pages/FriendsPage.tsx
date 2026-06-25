@@ -175,8 +175,8 @@ export default function FriendsLayout() {
       )}
       <aside className={`
         w-64 bg-softspace-900 border-r border-softspace-800 flex flex-col shrink-0
-        absolute md:relative z-40 h-full transition-transform duration-200 ease-in-out
-        ${mobileChannelSidebarOpen ? 'translate-x-0' : '-translate-x-full md:transform-none'}
+        absolute left-0 top-0 z-40 h-full transition-transform duration-200 ease-in-out md:relative md:translate-x-0
+        ${mobileChannelSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="p-3 space-y-1">
           <SidebarItem
@@ -495,7 +495,7 @@ export function FriendsContent() {
 
   return (
     <>
-      <div className="h-14 border-b border-softspace-800 flex items-center px-4 md:px-6 gap-3 shrink-0">
+      <div className="h-safe-header border-b border-softspace-800 flex items-center px-4 md:px-6 gap-3 shrink-0">
         <div className="md:hidden flex items-center gap-2 mr-2">
           <button onClick={() => setMobileSidebarOpen(true)} className="p-1.5 text-softspace-400 hover:text-softspace-100 rounded-lg">
             <Menu size={20} />

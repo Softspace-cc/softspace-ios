@@ -38,9 +38,44 @@ import BlogAdminPage from './pages/BlogAdminPage';
 import EmailChangeAdminPage from './pages/EmailChangeAdminPage';
 import { CallRingModal } from './components/CallRingModal';
 import { GlobalContextMenu } from './components/GlobalContextMenu';
-import { isDesktopApp } from './lib/platform';
+import { isDesktopApp, isCapacitorApp } from './lib/platform';
 
 import { useServerStore } from './store/useServerStore';
+
+// ...
+function AppLayout() {
+  const { mobileSidebarOpen, setMobileSidebarOpen } = useLayoutStore();
+  
+  return (
+    <div className="flex h-full w-full bg-softspace-950 text-softspace-50 overflow-hidden relative">
+      {/* Mobile overlay for main sidebar */}
+      {mobileSidebarOpen && (
+        <div 
+          className="md:hidden fixed inset-0 bg-black/50 z-40" 
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
+      <div className={`
+        absolute left-0 top-0 z-50 h-full transition-transform duration-200 ease-in-out w-20 md:relative md:translate-x-0 md:w-auto
+        ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <Sidebar />
+      </div>
+      <div className="flex-1 flex flex-col bg-softspace-900 overflow-hidden relative min-w-0">
+        <Outlet />
+      </div>
+      <GlobalCallManager />
+      <GlobalNotificationManager />
+      <GlobalPresenceManager />
+      <CallRingModal />
+      <GlobalContextMenu />
+    </div>
+  );
+}
+
+const isElectron = isDesktopApp();
+const isCapacitor = isCapacitorApp();
+const Router = (isElectron || isCapacitor) ? HashRouter : BrowserRouter;
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore(state => state.token);
@@ -249,39 +284,7 @@ import TitleBar from './components/TitleBar';
 import { GlobalNotificationManager } from './components/GlobalNotificationManager';
 import { GlobalPresenceManager } from './components/GlobalPresenceManager';
 
-function AppLayout() {
-  const { mobileSidebarOpen, setMobileSidebarOpen } = useLayoutStore();
-  
-  return (
-    <div className="flex h-full w-full bg-softspace-950 text-softspace-50 overflow-hidden relative">
-      {/* Mobile overlay for main sidebar */}
-      {mobileSidebarOpen && (
-        <div 
-          className="md:hidden fixed inset-0 bg-black/50 z-40" 
-          onClick={() => setMobileSidebarOpen(false)}
-        />
-      )}
-      <div className={`
-        absolute md:relative z-50 h-full transition-transform duration-200 ease-in-out
-        ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:transform-none'}
-      `}>
-        <Sidebar />
-      </div>
-      <div className="flex-1 flex flex-col bg-softspace-900 overflow-hidden relative min-w-0">
-        <Outlet />
-      </div>
-      <GlobalCallManager />
-      <GlobalNotificationManager />
-      <GlobalPresenceManager />
-      <CallRingModal />
-      <GlobalContextMenu />
-    </div>
-  );
-}
 
-const isElectron = isDesktopApp();
-const isCapacitor = typeof window !== 'undefined' && typeof (window as any).Capacitor !== 'undefined';
-const Router = (isElectron || isCapacitor) ? HashRouter : BrowserRouter;
 
 export default function App() {
   const content = (

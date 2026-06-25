@@ -26,7 +26,7 @@ jobs:
       - name: Install Client dependencies
         run: |
           cd client
-          npm ci --omit=optional
+          npm install --omit=optional --force
 
       - name: Build Web Client
         run: |

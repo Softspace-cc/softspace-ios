@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "DMMessage" ADD COLUMN "messageType" TEXT NOT NULL DEFAULT 'USER';
+ALTER TABLE "DMMessage" ADD COLUMN "callMeta" TEXT;

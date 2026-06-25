@@ -1,0 +1,87 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iOS App
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: |
+            client/package-lock.json
+
+      # 1. Build Client Web Assets
+      - name: Install Client dependencies
+        run: |
+          cd client
+          npm ci
+
+      - name: Build Web Client
+        run: |
+          cd client
+          npm run build
+
+      # 2. Setup iOS Project
+      - name: Install iOS App dependencies
+        run: |
+          cd "ios app"
+          npm ci
+
+      - name: Install Capacitor iOS Platform
+        run: |
+          cd "ios app"
+          npx cap add ios
+
+      - name: Copy & Sync Web Assets
+        run: |
+          cd "ios app"
+          npx cap sync ios
+
+      # 3. Generate Assets (Icon/Splash)
+      - name: Generate Mobile Assets
+        run: |
+          cd client
+          node generate-mobile-assets.cjs
+          cd "../ios app"
+          npx capacitor-assets generate --ios
+
+      # 4. Compile iOS Xcode project (creates unsigned IPA)
+      - name: Build Xcode Workspace
+        run: |
+          cd "ios app/ios/App"
+          xcodebuild -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -allowProvisioningUpdates \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            archive -archivePath build/App.xcarchive
+
+      - name: Export Unsigned IPA
+        run: |
+          cd "ios app/ios/App"
+          mkdir -p Payload
+          cp -r build/App.xcarchive/Products/Applications/App.app Payload/Softspace.app
+          zip -r Softspace.ipa Payload
+          mv Softspace.ipa ../../../Softspace.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Softspace-iOS-Unsigned-IPA
+          path: Softspace.ipa
+          if-no-files-found: error

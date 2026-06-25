@@ -1,0 +1,34 @@
+{
+  "name": "softspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Softspace – a cozy chat home for the LGBTQ+, femboy, and furry community.",
+  "workspaces": [
+    "client",
+    "client/installer",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c magenta,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "build:client": "npm --prefix client run build",
+    "build:server": "npm --prefix server run build",
+    "start": "npm --prefix server run start",
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "db:migrate": "npm --prefix server run db:migrate",
+    "db:migrate:dev": "npm --prefix server run db:migrate:dev",
+    "db:generate": "npm --prefix server run db:generate",
+    "db:seed": "npm --prefix server run db:seed"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ssh2": "^1.17.0"
+  }
+}

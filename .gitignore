@@ -1,0 +1,43 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.vscode/
+.idea/
+coverage/
+.turbo/
+.cache/
+.continue/
+.sixth/
+.dbg/
+
+# Duplicate / Backup directories
+beta app testers/
+
+# Server
+server/uploads/
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/releases/
+
+# Client
+client/dist/
+client/electron-cache/
+client/installer/resources/
+
+# Docker
+docker-data/
+
+# Mobile Builds & Compiled Binaries
+*.apk
+*.ipa
+*.zip
+*.exe
+*.asar
+*.bin
+*.dll
+*.dmg

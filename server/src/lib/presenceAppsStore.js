@@ -1,0 +1,92 @@
+import fs from 'fs/promises';
+import path from 'path';
+
+const STORE_PATH = path.resolve(process.cwd(), 'data', 'presence-apps.json');
+
+let cachedRules = null;
+
+const defaultRules = [
+  { processName: 'Discord.exe', displayName: 'Discord', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/discord/5865F2', accentColor: '#5865F2' },
+  { processName: 'chrome.exe', displayName: 'Google Chrome', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/googlechrome/4285F4', accentColor: '#4285F4' },
+  { processName: 'firefox.exe', displayName: 'Firefox', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/firefox/FF7139', accentColor: '#FF7139' },
+  { processName: 'msedge.exe', displayName: 'Microsoft Edge', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/microsoftedge/0078D4', accentColor: '#0078D4' },
+  { processName: 'Code.exe', displayName: 'Visual Studio Code', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/visualstudiocode/007ACC', accentColor: '#007ACC' },
+  { processName: 'Cursor.exe', displayName: 'Cursor', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/cursor/000000', accentColor: '#6B7280' },
+  { processName: 'devenv.exe', displayName: 'Visual Studio', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/visualstudio/5C2D91', accentColor: '#5C2D91' },
+  { processName: 'Notion.exe', displayName: 'Notion', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/notion/000000', accentColor: '#9CA3AF' },
+  { processName: 'slack.exe', displayName: 'Slack', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/slack/4A154B', accentColor: '#4A154B' },
+  { processName: 'Teams.exe', displayName: 'Microsoft Teams', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/microsoftteams/6264A7', accentColor: '#6264A7' },
+  { processName: 'Zoom.exe', displayName: 'Zoom', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/zoom/0B5CFF', accentColor: '#0B5CFF' },
+  { processName: 'Obsidian.exe', displayName: 'Obsidian', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/obsidian/7C3AED', accentColor: '#7C3AED' },
+  { processName: 'steam.exe', displayName: 'Steam', type: 'APP', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/steam/000000', accentColor: '#1B2838' },
+  { processName: 'EpicGamesLauncher.exe', displayName: 'Epic Games', type: 'APP', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/epicgames/313131', accentColor: '#313131' },
+  { processName: 'Spotify.exe', displayName: 'Spotify', type: 'APP', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/spotify/1DB954', accentColor: '#1DB954' },
+  { processName: 'Telegram.exe', displayName: 'Telegram', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/telegram/26A5E4', accentColor: '#26A5E4' },
+  { processName: 'WhatsApp.exe', displayName: 'WhatsApp', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/whatsapp/25D366', accentColor: '#25D366' },
+  { processName: 'obs64.exe', displayName: 'OBS Studio', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/obsstudio/302E31', accentColor: '#302E31' },
+  { processName: 'vlc.exe', displayName: 'VLC', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/vlcmediaplayer/FF8800', accentColor: '#FF8800' },
+  { processName: 'WINWORD.EXE', displayName: 'Microsoft Word', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/microsoftword/185ABD', accentColor: '#185ABD' },
+  { processName: 'EXCEL.EXE', displayName: 'Microsoft Excel', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/microsoftexcel/217346', accentColor: '#217346' },
+  { processName: 'POWERPNT.EXE', displayName: 'PowerPoint', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/microsoftpowerpoint/B7472A', accentColor: '#B7472A' },
+  { processName: 'ONENOTE.EXE', displayName: 'OneNote', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/microsoftonenote/7719AA', accentColor: '#7719AA' },
+  { processName: 'Figma.exe', displayName: 'Figma', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/figma/F24E1E', accentColor: '#F24E1E' },
+  { processName: 'blender.exe', displayName: 'Blender', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/blender/E87D0D', accentColor: '#E87D0D' },
+  { processName: 'Photoshop.exe', displayName: 'Adobe Photoshop', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/adobephotoshop/31A8FF', accentColor: '#31A8FF' },
+  { processName: 'Adobe Premiere Pro.exe', displayName: 'Premiere Pro', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/adobepremierepro/9999FF', accentColor: '#9999FF' },
+  { processName: 'AfterFX.exe', displayName: 'After Effects', type: 'APP', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/adobeaftereffects/9999FF', accentColor: '#9999FF' },
+  { processName: 'Minecraft.exe', displayName: 'Minecraft', type: 'GAME', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/minecraft/62B47A', accentColor: '#62B47A' },
+  { processName: 'MinecraftLauncher.exe', displayName: 'Minecraft', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/minecraft/62B47A', accentColor: '#62B47A' },
+  { processName: 'RobloxPlayerBeta.exe', displayName: 'Roblox', type: 'GAME', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/roblox/000000', accentColor: '#E2231A' },
+  { processName: 'FortniteClient-Win64-Shipping.exe', displayName: 'Fortnite', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/epicgames/313131', accentColor: '#8A2BE2' },
+  { processName: 'VALORANT-Win64-Shipping.exe', displayName: 'VALORANT', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/riotgames/EB0029', accentColor: '#FF4655' },
+  { processName: 'League of Legends.exe', displayName: 'League of Legends', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/leagueoflegends/C89B3C', accentColor: '#C89B3C' },
+  { processName: 'LeagueClient.exe', displayName: 'League of Legends', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/leagueoflegends/C89B3C', accentColor: '#C89B3C' },
+  { processName: 'cs2.exe', displayName: 'Counter-Strike 2', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/counterstrike/000000', accentColor: '#DE9B35' },
+  { processName: 'GTA5.exe', displayName: 'GTA V', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/rockstargames/FCAF17', accentColor: '#FCAF17' },
+  { processName: 'RocketLeague.exe', displayName: 'Rocket League', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/rocketleague/007EE5', accentColor: '#007EE5' },
+  { processName: 'Among Us.exe', displayName: 'Among Us', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/amongus/FF0000', accentColor: '#FF0000' },
+  { processName: 'FallGuys_client.exe', displayName: 'Fall Guys', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/epicgames/313131', accentColor: '#F4D03F' },
+  { processName: 'Overwatch.exe', displayName: 'Overwatch 2', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/overwatch/FA9C1E', accentColor: '#FA9C1E' },
+  { processName: 'r5apex.exe', displayName: 'Apex Legends', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/apexlegends/DA2929', accentColor: '#DA2929' },
+  { processName: 'eldenring.exe', displayName: 'Elden Ring', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/steam/000000', accentColor: '#B8860B' },
+  { processName: 'Cyberpunk2077.exe', displayName: 'Cyberpunk 2077', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/steam/000000', accentColor: '#FCEE0A' },
+  { processName: 'The Sims 4.exe', displayName: 'The Sims 4', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/ea/000000', accentColor: '#15A3F6' },
+  { processName: 'Stardew Valley.exe', displayName: 'Stardew Valley', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/steam/000000', accentColor: '#78C850' },
+  { processName: 'Terraria.exe', displayName: 'Terraria', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/steam/000000', accentColor: '#3C9D2E' },
+  { processName: 'GenshinImpact.exe', displayName: 'Genshin Impact', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/genshinimpact/FFE434', accentColor: '#FFE434' },
+  { processName: 'osu!.exe', displayName: 'osu!', type: 'GAME', showTitle: true, iconUrl: 'https://cdn.simpleicons.org/osu/FF66AA', accentColor: '#FF66AA' },
+  { processName: 'dota2.exe', displayName: 'Dota 2', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/dota2/C23C2A', accentColor: '#C23C2A' },
+  { processName: 'TslGame.exe', displayName: 'PUBG', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/pubg/F2A900', accentColor: '#F2A900' },
+  { processName: 'RainbowSix.exe', displayName: 'Rainbow Six Siege', type: 'GAME', showTitle: false, iconUrl: 'https://cdn.simpleicons.org/ubisoft/000000', accentColor: '#111111' },
+];
+
+function mergeRules(savedRules) {
+  const byProcess = new Map();
+  for (const rule of defaultRules) {
+    byProcess.set(rule.processName.toLowerCase(), rule);
+  }
+  for (const rule of savedRules ?? []) {
+    const key = rule.processName.toLowerCase();
+    byProcess.set(key, { ...byProcess.get(key), ...rule });
+  }
+  return Array.from(byProcess.values());
+}
+
+export async function getPresenceRules() {
+  if (cachedRules) return cachedRules;
+  try {
+    await fs.mkdir(path.dirname(STORE_PATH), { recursive: true });
+    const data = await fs.readFile(STORE_PATH, 'utf-8');
+    cachedRules = mergeRules(JSON.parse(data));
+  } catch (err) {
+    cachedRules = defaultRules;
+    await savePresenceRules(cachedRules).catch(() => {});
+  }
+  return cachedRules;
+}
+
+export async function savePresenceRules(rules) {
+  cachedRules = mergeRules(rules);
+  await fs.mkdir(path.dirname(STORE_PATH), { recursive: true });
+  await fs.writeFile(STORE_PATH, JSON.stringify(cachedRules, null, 2), 'utf-8');
+}

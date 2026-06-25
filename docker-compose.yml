@@ -1,0 +1,78 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: softspace-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-softspace}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-softspace}
+      POSTGRES_DB: ${POSTGRES_DB:-softspace}
+    volumes:
+      - softspace-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-softspace}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: softspace-server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-softspace}:${POSTGRES_PASSWORD:-softspace}@db:5432/${POSTGRES_DB:-softspace}
+      JWT_SECRET: ${JWT_SECRET}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-https://softspace.cc}
+      UPLOAD_DIR: /data/uploads
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
+    volumes:
+      - softspace-uploads:/data/uploads
+    expose:
+      - "4000"
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://softspace.cc/api}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-https://softspace.cc}
+    container_name: softspace-client
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  proxy:
+    image: nginx:alpine
+    container_name: softspace-proxy
+    restart: unless-stopped
+    depends_on:
+      - server
+      - client
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certbot/conf:/etc/letsencrypt:ro
+      - ./nginx/certbot/www:/var/www/certbot:ro
+      - softspace-uploads:/var/www/uploads:ro
+
+  certbot:
+    image: certbot/certbot
+    container_name: softspace-certbot
+    volumes:
+      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./nginx/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+volumes:
+  softspace-db:
+  softspace-uploads:

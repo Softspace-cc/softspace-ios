@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "badges" TEXT;
+
+-- AlterTable
+ALTER TABLE "DMMessage" ADD COLUMN "replyToId" TEXT REFERENCES "DMMessage" ("id") ON DELETE SET NULL ON UPDATE CASCADE;

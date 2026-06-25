@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Outfit', 'Quicksand', system-ui, -apple-system, sans-serif;
+    @apply bg-softspace-950 text-softspace-50 antialiased selection:bg-softspace-500/30 selection:text-softspace-100;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Quicksand', 'Outfit', system-ui, sans-serif;
+    font-weight: 700;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Custom scrollbar for a softer look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-softspace-800 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-softspace-700;
+}

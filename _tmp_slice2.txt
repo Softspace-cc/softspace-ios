@@ -1,0 +1,12 @@
+﻿  );
+}
+
+function ChannelSidebar({
+  server,
+  serverId,
+  activeId,
+  onCreate,
+}: {
+  server: ServerInfo | null;
+  serverId: string;
+  activeId: string;

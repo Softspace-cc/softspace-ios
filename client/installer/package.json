@@ -1,0 +1,61 @@
+{
+  "name": "softspace-installer",
+  "description": "SoftSpace desktop installer",
+  "author": "Jamie",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build --base=./",
+    "electron:dev": "concurrently -k \"cross-env BROWSER=none npm run dev\" \"wait-on http://localhost:5174 && cross-env NODE_ENV=development electron .\"",
+    "electron:build": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false vite build --base=./ && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.softspace.setup",
+    "productName": "SoftSpace Setup",
+    "artifactName": "SoftSpace-Setup-${version}.${ext}",
+    "compression": "maximum",
+    "directories": {
+      "output": "../release-buildv3/installer",
+      "buildResources": "../build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "release-config.json",
+      "package.json"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "portable": {
+      "requestExecutionLevel": "user"
+    },
+    "win": {
+      "target": ["portable"],
+      "icon": "../build/icon.ico",
+      "signExecutable": false
+    }
+  },
+  "dependencies": {
+    "lucide-react": "^0.460.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "42.4.0",
+    "electron-builder": "^26.15.3",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "wait-on": "^9.0.10"
+  }
+}

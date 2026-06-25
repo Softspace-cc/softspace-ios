@@ -1,0 +1,92 @@
+{
+  "name": "softspace-client",
+  "description": "The open-source group chat app for friends and communities.",
+  "author": "Jamie",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:electron": "vite build --base=./",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "electron:dev": "concurrently -k \"cross-env BROWSER=none npm run dev\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "electron:build": "node scripts/build-release.cjs",
+    "installer:dev": "npm --prefix installer run electron:dev"
+  },
+  "build": {
+    "appId": "com.softspace.app",
+    "productName": "SoftSpace",
+    "directories": {
+      "output": "release-buildv3",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": ["dir"],
+      "icon": "build/icon.ico",
+      "signExecutable": false
+    },
+    "npmRebuild": false,
+    "asarUnpack": [
+      "**/node_modules/windows-media-sessions/**/*"
+    ],
+    "electronDownload": {
+      "cache": "electron-cache"
+    }
+  },
+  "dependencies": {
+    "active-win": "^8.2.1",
+    "clsx": "^2.1.0",
+    "date-fns": "^3.6.0",
+    "emoji-picker-react": "^4.19.1",
+    "i18next": "^23.10.1",
+    "lucide-react": "^0.460.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-easy-crop": "^5.5.7",
+    "react-i18next": "^14.1.0",
+    "react-router-dom": "^6.22.3",
+    "simple-peer": "^9.11.1",
+    "socket.io-client": "^4.7.5",
+    "tailwind-merge": "^2.2.2",
+    "uuid": "^14.0.0",
+    "zustand": "^4.5.2"
+  },
+  "optionalDependencies": {
+    "windows-media-sessions": "^1.0.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.12.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/simple-peer": "^9.11.8",
+    "@vitejs/plugin-react": "^6.0.1",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "42.4.0",
+    "electron-builder": "^26.15.3",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "png-to-ico": "^3.0.1",
+    "postcss": "^8.4.38",
+    "sharp": "^0.35.1",
+    "tailwindcss": "^3.4.3",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.59.2",
+    "vite": "^8.0.12",
+    "wait-on": "^9.0.10"
+  }
+}

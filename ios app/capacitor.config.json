@@ -1,0 +1,8 @@
+{
+  "appId": "com.softspace.app",
+  "appName": "SoftSpace",
+  "webDir": "../client/dist",
+  "server": {
+    "iosScheme": "capacitor"
+  }
+}

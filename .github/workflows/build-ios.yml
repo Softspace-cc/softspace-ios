@@ -37,7 +37,7 @@ jobs:
       - name: Install iOS App dependencies
         run: |
           cd "ios app"
-          npm ci
+          npm install
 
       - name: Install Capacitor iOS Platform
         run: |

@@ -287,6 +287,18 @@ import { GlobalPresenceManager } from './components/GlobalPresenceManager';
 
 
 export default function App() {
+  useEffect(() => {
+    const preventDefault = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('dragover', preventDefault);
+    window.addEventListener('drop', preventDefault);
+    return () => {
+      window.removeEventListener('dragover', preventDefault);
+      window.removeEventListener('drop', preventDefault);
+    };
+  }, []);
+
   const content = (
     <Router>
       <Routes>

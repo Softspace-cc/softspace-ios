@@ -1098,7 +1098,16 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
     setUploading(true);
     try {
       const fd = new FormData();
-      files.forEach(f => fd.append('files', f));
+      for (const f of files) {
+        let fileBlob: Blob = f;
+        try {
+          const buffer = await f.arrayBuffer();
+          fileBlob = new Blob([buffer], { type: f.type });
+        } catch (readErr) {
+          console.warn('Could not read file as arrayBuffer, falling back to original file object:', readErr);
+        }
+        fd.append('files', fileBlob, f.name);
+      }
       const res = await api(
         '/api/uploads',
         { method: 'POST', body: fd },

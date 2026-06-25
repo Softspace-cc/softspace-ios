@@ -60,6 +60,18 @@ model User {
   bans                   ServerBan[]
   verificationCodes      VerificationCode[]
   notes                  UserNote[]
+  pushTokens             PushToken[]
+}
+
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String   // "ios" or "android"
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model BlogPost {

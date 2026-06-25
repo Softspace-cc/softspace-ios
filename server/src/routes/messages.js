@@ -119,6 +119,31 @@ router.post('/channels/:channelId/messages', requireAuth, async (req, res, next)
 
     const payload = serializeMessage(message);
     req.app.get('io')?.to(`channel:${channel.id}`).emit('message:created', payload);
+
+    // Send push notification to server members (except sender)
+    void prisma.serverMember.findMany({
+      where: {
+        serverId: channel.serverId,
+        userId: { not: req.user.id }
+      },
+      select: { userId: true }
+    }).then(serverMembers => {
+      const recipientIds = serverMembers.map(m => m.userId);
+      if (recipientIds.length > 0) {
+        import('../lib/pushNotifications.js').then(({ sendPushNotification }) => {
+          sendPushNotification(recipientIds, {
+            title: `#${channel.name}`,
+            body: `${message.author.displayName || message.author.username}: ${message.content || 'Sent an attachment'}`,
+            data: {
+              channelId: channel.id,
+              serverId: channel.serverId,
+              type: 'channel'
+            }
+          }).catch(err => console.error('Failed to send channel push notification', err));
+        }).catch(err => console.error('Failed to import pushNotifications', err));
+      }
+    }).catch(err => console.error('Failed to fetch server members for push notification', err));
+
     res.status(201).json({ message: payload });
   } catch (err) {
     next(err);

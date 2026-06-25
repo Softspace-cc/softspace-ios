@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '../store/useChatStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
-import { publicAssetUrl } from '../lib/api';
+import { apiJson, publicAssetUrl } from '../lib/api';
 import { isCapacitorApp } from '../lib/platform';
 import type { DesktopNotificationTarget } from '../lib/desktopNotifications';
 import {
@@ -17,6 +17,7 @@ export function GlobalNotificationManager() {
   const { t } = useTranslation();
   const socket = useChatStore(state => state.socket);
   const user = useAuthStore(state => state.user);
+  const token = useAuthStore(state => state.token);
   const activeChannelId = useChatStore(state => state.activeChannelId);
   const setActiveChannel = useChatStore(state => state.setActiveChannel);
   const setActiveCall = useChatStore(state => state.setActiveCall);
@@ -90,6 +91,86 @@ export function GlobalNotificationManager() {
       }
     };
   }, [navigate, setActiveCall, setActiveChannel]);
+
+  // Register for Capacitor push notifications when user is logged in
+  useEffect(() => {
+    if (!isCapacitorApp() || !user || !token) return;
+
+    let registrationListener: any = null;
+    let errorListener: any = null;
+    let pushNotificationReceivedListener: any = null;
+    let pushNotificationActionPerformedListener: any = null;
+
+    import('@capacitor/push-notifications').then(({ PushNotifications }) => {
+      // Request permission
+      PushNotifications.requestPermissions().then((result) => {
+        if (result.receive === 'granted') {
+          // Register with Apple / Google to receive token
+          PushNotifications.register();
+        } else {
+          console.warn('[Push] Push notifications permission denied');
+        }
+      });
+
+      // Listen for registration success
+      PushNotifications.addListener('registration', (pushToken) => {
+        console.log('[Push] Token registered successfully:', pushToken.value);
+        const platform = window.navigator.userAgent.toLowerCase().includes('android') ? 'android' : 'ios';
+        
+        apiJson('/api/users/me/push-tokens', {
+          method: 'POST',
+          body: {
+            token: pushToken.value,
+            platform,
+          },
+        }, token).then(() => {
+          console.log('[Push] Registered token on server.');
+        }).catch(err => {
+          console.error('[Push] Failed to register token on server:', err);
+        });
+      }).then(handle => {
+        registrationListener = handle;
+      });
+
+      // Listen for registration error
+      PushNotifications.addListener('registrationError', (error) => {
+        console.error('[Push] Error on registration:', error);
+      }).then(handle => {
+        errorListener = handle;
+      });
+
+      // Listen for incoming notifications when app is active/foreground
+      PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        console.log('[Push] Notification received in foreground:', notification);
+      }).then(handle => {
+        pushNotificationReceivedListener = handle;
+      });
+
+      // Listen for notification action (when user clicks the push notification banner)
+      PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+        console.log('[Push] Action performed on push notification:', action);
+        const data = action.notification.data;
+        if (!data) return;
+
+        if (data.type === 'dm' && data.channelId) {
+          setActiveChannel(null, data.channelId);
+          navigate(`/app/dms/${data.channelId}`);
+        } else if (data.type === 'channel' && data.channelId) {
+          setActiveChannel(data.serverId ?? null, data.channelId);
+          navigate('/app/channels');
+        }
+      }).then(handle => {
+        pushNotificationActionPerformedListener = handle;
+      });
+    }).catch(err => console.error('Failed to initialize push notifications', err));
+
+    return () => {
+      if (registrationListener) registrationListener.remove();
+      if (errorListener) errorListener.remove();
+      if (pushNotificationReceivedListener) pushNotificationReceivedListener.remove();
+      if (pushNotificationActionPerformedListener) pushNotificationActionPerformedListener.remove();
+    };
+  }, [user, token, navigate, setActiveChannel]);
 
   const audioContextRef = useRef<AudioContext | null>(null);
 

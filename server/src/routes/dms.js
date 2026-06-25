@@ -297,6 +297,35 @@ router.post('/:channelId/messages', requireAuth, async (req, res, next) => {
     for (const m of members) {
       io?.to(`user:${m.userId}`).emit('dm:message_created', payload);
     }
+
+    // Send push notifications to other members
+    const recipientIds = members.map(m => m.userId).filter(id => id !== req.user.id);
+    if (recipientIds.length > 0) {
+      void prisma.dMChannel.findUnique({
+        where: { id: channelId },
+        select: { isGroup: true, name: true }
+      }).then(channel => {
+        if (!channel) return;
+        import('../lib/pushNotifications.js').then(({ sendPushNotification }) => {
+          const title = channel.isGroup
+            ? (channel.name || 'Group Chat')
+            : (message.author.displayName || message.author.username);
+          const body = channel.isGroup
+            ? `${message.author.displayName || message.author.username}: ${message.content || 'Sent an attachment'}`
+            : (message.content || 'Sent an attachment');
+
+          sendPushNotification(recipientIds, {
+            title,
+            body,
+            data: {
+              channelId,
+              type: 'dm'
+            }
+          }).catch(err => console.error('Failed to send DM push notification', err));
+        }).catch(err => console.error('Failed to import pushNotifications', err));
+      }).catch(err => console.error('Failed to fetch DM channel for push notification', err));
+    }
+
     res.status(201).json({ message: payload });
   } catch (err) {
     next(err);

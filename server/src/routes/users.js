@@ -648,5 +648,35 @@ router.put('/notes/:targetId', requireAuth, async (req, res, next) => {
   }
 });
 
+router.post('/me/push-tokens', requireAuth, async (req, res, next) => {
+  try {
+    const { token, platform } = req.body;
+    if (!token || !platform) throw httpError(400, 'token_and_platform_required');
+    if (platform !== 'ios' && platform !== 'android') throw httpError(400, 'invalid_platform');
+
+    const pushToken = await prisma.pushToken.upsert({
+      where: { token },
+      update: { userId: req.user.id, platform },
+      create: { userId: req.user.id, token, platform },
+    });
+
+    res.status(201).json({ ok: true, pushToken });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/me/push-tokens/:token', requireAuth, async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    await prisma.pushToken.deleteMany({
+      where: { token, userId: req.user.id },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
 

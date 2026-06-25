@@ -482,6 +482,11 @@ export default function VoiceChat({
 
     async function start() {
       try {
+        if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          console.warn('Media devices or getUserMedia not supported.');
+          setError('voice_microphone_denied');
+          return;
+        }
         const audioConstraints: MediaTrackConstraints = {
           noiseSuppression: audioVideoSettings.noiseSuppression,
           echoCancellation: audioVideoSettings.echoCancellation,
@@ -1200,7 +1205,7 @@ function ParticipantTile({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isSpeaking = useSpeaking(participant.stream);
 
-  // Create a detached audio element that survives DOM reparenting
+  // Create a detached audio element that survives DOM reparenting and attach it to the DOM for WebView support
   useEffect(() => {
     const audio = new Audio();
     audio.autoplay = true;
@@ -1208,12 +1213,17 @@ function ParticipantTile({
     audio.playsInline = true;
     // Ensure audio can play without user interaction
     audio.setAttribute('playsinline', '');
-    // Do NOT set crossOrigin - it breaks WebRTC audio playback
+    // Appending it to the body ensures mobile WebViews allow audio playback
+    audio.style.display = 'none';
+    document.body.appendChild(audio);
     audioElRef.current = audio;
 
     return () => {
       audio.pause();
       audio.srcObject = null;
+      if (document.body.contains(audio)) {
+        document.body.removeChild(audio);
+      }
       audioElRef.current = null;
     };
   }, []);

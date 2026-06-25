@@ -874,8 +874,14 @@ function AudioVideoTab() {
   const [hasPermission, setHasPermission] = useState(false);
 
   useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices) {
+      console.warn('navigator.mediaDevices is not available');
+      return;
+    }
+
     const getDevices = async () => {
       try {
+        if (!navigator.mediaDevices.getUserMedia) return;
         await navigator.mediaDevices.getUserMedia({ audio: true });
         setHasPermission(true);
         const allDevices = await navigator.mediaDevices.enumerateDevices();
@@ -886,9 +892,13 @@ function AudioVideoTab() {
     };
     getDevices();
 
-    navigator.mediaDevices.addEventListener('devicechange', getDevices);
+    const handleDeviceChange = () => {
+      getDevices();
+    };
+
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
     return () => {
-      navigator.mediaDevices.removeEventListener('devicechange', getDevices);
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
     };
   }, []);
 

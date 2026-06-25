@@ -22,12 +22,14 @@ export function GlobalNotificationManager() {
   const setActiveCall = useChatStore(state => state.setActiveCall);
   const navigate = useNavigate();
   const messageSoundRef = useRef<HTMLAudioElement | null>(null);
+  const processedMessageIdsRef = useRef<Set<string>>(new Set());
 
-  // Initialize Capacitor local notifications permissions, channels, and click actions
+  // Initialize Capacitor local notifications permissions, channels, click actions and App state change listeners
   useEffect(() => {
     if (!isCapacitorApp()) return;
 
     let listenerHandle: any = null;
+    let appStateHandle: any = null;
 
     import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
       LocalNotifications.requestPermissions().then((permission) => {
@@ -63,9 +65,28 @@ export function GlobalNotificationManager() {
       });
     }).catch(err => console.error('Failed to initialize local notifications', err));
 
+    import('@capacitor/app').then(({ App }) => {
+      App.addListener('appStateChange', ({ isActive }) => {
+        console.log('App state changed, isActive:', isActive);
+        if (isActive) {
+          // Re-establish socket connection when app becomes active again
+          const currentSocket = useChatStore.getState().socket;
+          if (currentSocket && !currentSocket.connected) {
+            console.log('Reconnecting socket on app activation...');
+            currentSocket.connect();
+          }
+        }
+      }).then(handle => {
+        appStateHandle = handle;
+      });
+    }).catch(err => console.error('Failed to import @capacitor/app', err));
+
     return () => {
       if (listenerHandle) {
         listenerHandle.remove();
+      }
+      if (appStateHandle) {
+        appStateHandle.remove();
       }
     };
   }, [navigate, setActiveCall, setActiveChannel]);
@@ -158,6 +179,21 @@ export function GlobalNotificationManager() {
       if (msg.messageType === 'CALL_STARTED' || msg.messageType === 'CALL_ENDED') return;
       if (msg.authorId === user.id) return;
 
+      // Deduplicate message notifications by message ID
+      if (msg.id) {
+        if (processedMessageIdsRef.current.has(msg.id)) {
+          console.log('Skipping duplicate notification for message:', msg.id);
+          return;
+        }
+        processedMessageIdsRef.current.add(msg.id);
+        if (processedMessageIdsRef.current.size > 100) {
+          const firstValue = processedMessageIdsRef.current.values().next().value;
+          if (firstValue !== undefined) {
+            processedMessageIdsRef.current.delete(firstValue);
+          }
+        }
+      }
+
       if (
         !shouldNotifyForMessage({
           channelId: msg.channelId,
@@ -168,13 +204,17 @@ export function GlobalNotificationManager() {
         return;
       }
 
-      if (messageSoundRef.current) {
-        messageSoundRef.current.currentTime = 0;
-        messageSoundRef.current.play().catch(() => {
+      // Only play HTML audio if NOT on Capacitor.
+      // Capacitor local notifications handle their own sounds.
+      if (!isCapacitorApp()) {
+        if (messageSoundRef.current) {
+          messageSoundRef.current.currentTime = 0;
+          messageSoundRef.current.play().catch(() => {
+            playMessageSound();
+          });
+        } else {
           playMessageSound();
-        });
-      } else {
-        playMessageSound();
+        }
       }
 
       const title = msg.author?.displayName || msg.author?.username || t('notification_unknown_user');

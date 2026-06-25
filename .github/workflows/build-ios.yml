@@ -49,6 +49,23 @@ jobs:
           cd "ios app"
           npx cap sync ios
 
+      - name: Add Custom Notification Sounds to Xcode Project
+        run: |
+          gem install xcodeproj
+          ruby -e "
+            require 'xcodeproj'
+            project = Xcodeproj::Project.open('ios app/ios/App/App.xcodeproj')
+            target = project.targets.first
+            group = project.main_group['App']
+            require 'fileutils'
+            FileUtils.cp('client/public/sounds/message.mp3', 'ios app/ios/App/App/message.mp3')
+            FileUtils.cp('client/public/sounds/call_ring.mp3', 'ios app/ios/App/App/call_ring.mp3')
+            file_ref1 = group.new_file('message.mp3')
+            file_ref2 = group.new_file('call_ring.mp3')
+            target.add_resources([file_ref1, file_ref2])
+            project.save
+          "
+
       # 3. Generate Assets (Icon/Splash)
       - name: Generate Mobile Assets
         run: |

@@ -4,6 +4,7 @@ import { useChatStore } from '../store/useChatStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { publicAssetUrl } from '../lib/api';
+import { isCapacitorApp } from '../lib/platform';
 import type { DesktopNotificationTarget } from '../lib/desktopNotifications';
 import {
   authorAvatarIcon,
@@ -21,6 +22,53 @@ export function GlobalNotificationManager() {
   const setActiveCall = useChatStore(state => state.setActiveCall);
   const navigate = useNavigate();
   const messageSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize Capacitor local notifications permissions, channels, and click actions
+  useEffect(() => {
+    if (!isCapacitorApp()) return;
+
+    let listenerHandle: any = null;
+
+    import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
+      LocalNotifications.requestPermissions().then((permission) => {
+        if (permission.display === 'granted') {
+          LocalNotifications.createChannel({
+            id: 'messages',
+            name: 'Chat Messages',
+            description: 'Notification channel for chat messages',
+            sound: 'message.mp3', // android/app/src/main/res/raw/message.mp3
+            importance: 5,
+            visibility: 1,
+            vibration: true,
+          }).catch(err => console.error('Failed to create channel', err));
+        }
+      });
+
+      LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+        const payload = action.notification.extra;
+        if (!payload) return;
+
+        if (payload.type === 'call') {
+          setActiveCall({ channelId: payload.channelId, isDm: true, minimized: false });
+          navigate(`/app/dms/${payload.channelId}`);
+        } else if (payload.type === 'dm' && payload.channelId) {
+          setActiveChannel(null, payload.channelId);
+          navigate(`/app/dms/${payload.channelId}`);
+        } else if (payload.type === 'channel' && payload.channelId) {
+          setActiveChannel(payload.serverId ?? null, payload.channelId);
+          navigate('/app/channels');
+        }
+      }).then(handle => {
+        listenerHandle = handle;
+      });
+    }).catch(err => console.error('Failed to initialize local notifications', err));
+
+    return () => {
+      if (listenerHandle) {
+        listenerHandle.remove();
+      }
+    };
+  }, [navigate, setActiveCall, setActiveChannel]);
 
   const audioContextRef = useRef<AudioContext | null>(null);
 

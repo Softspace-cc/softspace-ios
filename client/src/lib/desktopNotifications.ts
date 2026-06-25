@@ -1,5 +1,6 @@
 import i18n from '../i18n';
 import { assetUrl } from './api';
+import { isCapacitorApp } from './platform';
 
 export type DesktopNotificationTarget =
   | { type: 'dm'; channelId: string }
@@ -17,6 +18,26 @@ export function showDesktopNotification(options: DesktopNotificationOptions): vo
   if (typeof window === 'undefined') return;
 
   const { title, body, icon, navigationTarget } = options;
+
+  if (isCapacitorApp()) {
+    import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
+      LocalNotifications.schedule({
+        notifications: [
+          {
+            title,
+            body,
+            id: Math.floor(Math.random() * 100000),
+            schedule: { at: new Date(Date.now() + 50) },
+            sound: 'message.mp3', // For iOS (copied to bundle)
+            channelId: 'messages', // For Android (configured channel)
+            extra: navigationTarget,
+          }
+        ]
+      }).catch(err => console.error('Failed to schedule local notification', err));
+    }).catch(err => console.error('Failed to load LocalNotifications plugin', err));
+    return;
+  }
+
   // Prefer the native Electron notification bridge when available
   if (window.electron?.showNotification) {
     window.electron.showNotification({

@@ -53,6 +53,8 @@ jobs:
         run: |
           plutil -replace NSMicrophoneUsageDescription -string "Softspace needs microphone access for voice calls." "ios app/ios/App/App/Info.plist"
           plutil -replace NSCameraUsageDescription -string "Softspace needs camera access for video and screen sharing." "ios app/ios/App/App/Info.plist"
+          plutil -replace NSPhotoLibraryUsageDescription -string "Softspace needs access to your photo library to let you upload photos and media." "ios app/ios/App/App/Info.plist"
+          plutil -replace NSPhotoLibraryAddUsageDescription -string "Softspace needs permission to save photos to your library." "ios app/ios/App/App/Info.plist"
           plutil -replace UIBackgroundModes -xml "<array><string>audio</string><string>voip</string><string>fetch</string><string>remote-notification</string></array>" "ios app/ios/App/App/Info.plist"
           gem install xcodeproj
           ruby -e "

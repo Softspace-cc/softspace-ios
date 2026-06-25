@@ -1408,9 +1408,13 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
   // Drag and drop file upload handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (!canSendMessages) return;
-    if (e.dataTransfer.types.includes('Files')) {
-      e.preventDefault();
-      setIsDraggingFile(true);
+    const types = e.dataTransfer?.types;
+    if (types) {
+      const typeArray = Array.from(types);
+      if (typeArray.includes('Files') || typeArray.includes('files')) {
+        e.preventDefault();
+        setIsDraggingFile(true);
+      }
     }
   }, [canSendMessages]);
 
@@ -1421,19 +1425,26 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     if (!canSendMessages) return;
-    if (e.dataTransfer.types.includes('Files')) {
-      e.preventDefault();
-      setIsDraggingFile(false);
-      const files = Array.from(e.dataTransfer.files);
-      await uploadFiles(files);
+    const types = e.dataTransfer?.types;
+    if (types) {
+      const typeArray = Array.from(types);
+      if (typeArray.includes('Files') || typeArray.includes('files')) {
+        e.preventDefault();
+        setIsDraggingFile(false);
+        const files = Array.from(e.dataTransfer.files);
+        await uploadFiles(files);
+      }
     }
   }, [canSendMessages, token]);
 
   const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (!canSendMessages) return;
-    const items = Array.from(e.clipboardData.items);
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
     const files: File[] = [];
-    for (const item of items) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
       if (item.kind === 'file') {
         const file = item.getAsFile();
         if (file) files.push(file);

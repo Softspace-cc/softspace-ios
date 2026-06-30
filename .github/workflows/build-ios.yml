@@ -42,7 +42,11 @@ jobs:
       - name: Install Capacitor iOS Platform
         run: |
           cd "ios app"
-          npx cap add ios
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          else
+            echo "iOS platform already added."
+          fi
 
       - name: Copy & Sync Web Assets
         run: |

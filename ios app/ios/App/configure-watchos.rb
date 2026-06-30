@@ -71,7 +71,7 @@ watch_target.build_configurations.each do |config|
   config.build_settings['SDKROOT'] = 'watchos'
   config.build_settings['SUPPORTED_PLATFORMS'] = 'watchos watchsimulator'
   config.build_settings['SWIFT_VERSION'] = '5.0'
-  config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.softspace.app.watch'
+  config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.softspace.app.YJNM8568Q6.watch'
   config.build_settings['INFOPLIST_FILE'] = 'WatchApp/Info.plist'
   config.build_settings['WATCHOS_DEPLOYMENT_TARGET'] = '9.0'
   config.build_settings['GENERATE_INFOPLIST_FILE'] = 'NO'

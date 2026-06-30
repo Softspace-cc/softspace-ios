@@ -90,6 +90,7 @@ jobs:
       - name: Build Xcode Workspace
         run: |
           cd "ios app/ios/App"
+          rm -rf ~/Library/Developer/Xcode/DerivedData/App-*
           xcodebuild -workspace App.xcworkspace \
             -scheme App \
             -configuration Release \

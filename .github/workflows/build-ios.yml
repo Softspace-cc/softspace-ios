@@ -106,6 +106,7 @@ jobs:
           cd "ios app/ios/App"
           mkdir -p Payload
           cp -r build/App.xcarchive/Products/Applications/App.app Payload/Softspace.app
+          find Payload/Softspace.app -maxdepth 3
           zip -r Softspace.ipa Payload
           mv Softspace.ipa ../../../Softspace.ipa
 

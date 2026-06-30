@@ -22,8 +22,6 @@
 	<string>1</string>
 	<key>WKApplication</key>
 	<true/>
-	<key>WKWatchKitApp</key>
-	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.softspace.app</string>
 	<key>WKRunsIndependentlyOfCompanionApp</key>

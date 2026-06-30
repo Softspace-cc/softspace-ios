@@ -37,6 +37,11 @@ export async function clearExpiredPlatformBan(user) {
     return user;
   }
   await clearStoredPlatformBan(user.id);
+  if (user) {
+    user.platformBanReason = null;
+    user.platformBanExpiresAt = null;
+    user.platformBanCreatedAt = null;
+  }
   return user;
 }
 

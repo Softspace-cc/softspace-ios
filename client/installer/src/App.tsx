@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import { TitleBar } from './components/TitleBar';
 import { InstallWizard, UninstallWizard } from './components/Wizard';
 
-type InstallStep = 'welcome' | 'location' | 'progress' | 'done';
+type InstallStep = 'language' | 'welcome' | 'location' | 'progress' | 'done';
 type UninstallStep = 'confirm' | 'progress' | 'done';
+type Language = 'en' | 'de';
 
 export default function App() {
   const [mode, setMode] = useState<'install' | 'uninstall' | null>(null);
-  const [installStep, setInstallStep] = useState<InstallStep>('welcome');
+  const [installStep, setInstallStep] = useState<InstallStep>('language');
   const [uninstallStep, setUninstallStep] = useState<UninstallStep>('confirm');
+  const [language, setLanguage] = useState<Language>('en');
   const [installDir, setInstallDir] = useState('');
   const [installedDir, setInstalledDir] = useState('');
   const [desktopShortcut, setDesktopShortcut] = useState(true);
@@ -150,6 +152,7 @@ export default function App() {
         {mode === 'install' ? (
           <InstallWizard
             step={installStep}
+            language={language}
             installDir={installDir}
             desktopShortcut={desktopShortcut}
             startMenuShortcut={startMenuShortcut}
@@ -163,7 +166,8 @@ export default function App() {
             requiresInternet={requiresInternet}
             error={error}
             onNext={() => {
-              if (installStep === 'welcome') setInstallStep('location');
+              if (installStep === 'language') setInstallStep('welcome');
+              else if (installStep === 'welcome') setInstallStep('location');
               else if (installStep === 'location') void handleInstall();
             }}
             onBack={() => setInstallStep('welcome')}
@@ -171,6 +175,7 @@ export default function App() {
             onBrowse={() => void handleBrowse()}
             onDesktopShortcutChange={setDesktopShortcut}
             onStartMenuShortcutChange={setStartMenuShortcut}
+            onLanguageChange={setLanguage}
             onLaunch={handleLaunch}
             onClose={handleClose}
           />

@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../store/useAuthStore';
-import { LogOut, User as UserIcon, Globe, Save, Mic, Volume2, Menu, ArrowUp, ArrowDown, Trash2 } from 'lucide-react';
+import { LogOut, User as UserIcon, Globe, Save, Mic, Volume2, Menu, ArrowUp, ArrowDown, Trash2, Monitor } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { api, assetUrl } from '../lib/api';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -77,6 +77,15 @@ export default function SettingsPage() {
             {t('audio_video')}
           </button>
           
+          {isDesktopApp() && (
+            <button
+              onClick={() => setActiveTab('desktop')}
+              className={`whitespace-nowrap md:w-full text-center md:text-left px-4 py-2 rounded-xl font-medium transition-colors ${activeTab === 'desktop' ? 'bg-softspace-800 text-softspace-100' : 'hover:bg-softspace-800 text-softspace-300'}`}
+            >
+              <Monitor size={18} className="inline-block md:hidden mr-1" />
+              <span className="hidden md:inline">{t('desktop')}</span>
+            </button>
+          )}
 
           <div className="hidden md:block my-4 border-t border-softspace-800" />
 
@@ -301,6 +310,37 @@ function SettingsContent(props: {
     }
   };
 
+  const uploadDirect = async (file: File, type: 'avatar' | 'banner') => {
+    if (!token) return;
+    const formData = new FormData();
+    formData.append('files', file);
+
+    try {
+      const res = await api('/api/uploads', {
+        method: 'POST',
+        body: formData
+      }, token);
+      
+      if (res.ok) {
+        const data = await res.json();
+        const url = data.attachments?.[0]?.url;
+        if (url) {
+          const update = type === 'avatar' ? { avatarUrl: url } : { bannerUrl: url };
+          const patchRes = await api('/api/users/me', {
+            method: 'PATCH',
+            body: JSON.stringify(update)
+          }, token);
+          if (patchRes.ok) {
+            const patchData = await patchRes.json();
+            setAuth(patchData.user, token);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
@@ -396,7 +436,8 @@ function SettingsContent(props: {
         return;
       }
 
-      const type = customEmojiFile.type === 'image/gif' ? 'GIF' : 'EMOJI';
+      const isGif = customEmojiFile.type === 'image/gif' || customEmojiFile.name.toLowerCase().endsWith('.gif');
+      const type = isGif ? 'GIF' : 'EMOJI';
       const createRes = await api(
         '/api/users/me/custom-emojis',
         {
@@ -568,7 +609,7 @@ function SettingsContent(props: {
                 <input
                   type="file"
                   hidden
-                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  accept="image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif"
                   onChange={(e) => setCustomEmojiFile(e.target.files?.[0] ?? null)}
                 />
               </label>
@@ -764,7 +805,15 @@ function SettingsContent(props: {
                           hidden 
                           accept="image/*,video/mp4,image/gif"
                           onChange={(e) => {
-                            if (e.target.files?.[0]) void handleCropImageUpload(e.target.files[0], 'avatar');
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const isGif = file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif');
+                              if (isGif) {
+                                void uploadDirect(file, 'avatar');
+                              } else {
+                                void handleCropImageUpload(file, 'avatar');
+                              }
+                            }
                           }}
                         />
                       </label>
@@ -794,7 +843,15 @@ function SettingsContent(props: {
                           hidden 
                           accept="image/*,video/mp4,image/gif"
                           onChange={(e) => {
-                            if (e.target.files?.[0]) void handleCropImageUpload(e.target.files[0], 'banner');
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const isGif = file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif');
+                              if (isGif) {
+                                void uploadDirect(file, 'banner');
+                              } else {
+                                void handleCropImageUpload(file, 'banner');
+                              }
+                            }
                           }}
                         />
                       </label>
@@ -862,7 +919,7 @@ function SettingsContent(props: {
 
       {activeTab === 'audiovideo' && <AudioVideoTab />}
 
-      
+      {activeTab === 'desktop' && <DesktopTab />}
     </>
   );
 }
@@ -1005,6 +1062,24 @@ function AudioVideoTab() {
             <span className="text-softspace-200 font-medium group-hover:text-white transition-colors">{t('noise_suppression')}</span>
           </label>
 
+          {audioVideo.noiseSuppression && (
+            <div className="ml-13 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-softspace-400 mb-2">{t('noise_suppression_level')}</label>
+                <select
+                  className="w-full bg-softspace-950 border border-softspace-800 rounded-xl px-4 py-3 text-softspace-100 focus:outline-none focus:border-softspace-500 transition-colors"
+                  value={audioVideo.noiseSuppressionLevel || 'medium'}
+                  onChange={(e) => setAudioVideoSettings({ noiseSuppressionLevel: e.target.value as 'low' | 'medium' | 'high' | 'aggressive' })}
+                >
+                  <option value="low">{t('low')}</option>
+                  <option value="medium">{t('medium')}</option>
+                  <option value="high">{t('high')}</option>
+                  <option value="aggressive">{t('aggressive')}</option>
+                </select>
+              </div>
+            </div>
+          )}
+
           <label className="flex items-center gap-3 cursor-pointer group">
             <div className="relative flex items-center justify-center">
               <input
@@ -1018,6 +1093,24 @@ function AudioVideoTab() {
             <span className="text-softspace-200 font-medium group-hover:text-white transition-colors">{t('echo_cancellation')}</span>
           </label>
 
+          {audioVideo.echoCancellation && (
+            <div className="ml-13 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-softspace-400 mb-2">{t('echo_cancellation_delay')}</label>
+                <input
+                  type="range"
+                  min="50"
+                  max="500"
+                  step="10"
+                  value={audioVideo.echoCancellationDelay || 100}
+                  onChange={(e) => setAudioVideoSettings({ echoCancellationDelay: parseInt(e.target.value, 10) })}
+                  className="w-full"
+                />
+                <div className="text-xs text-softspace-500 mt-1">{audioVideo.echoCancellationDelay || 100}ms</div>
+              </div>
+            </div>
+          )}
+
           <label className="flex items-center gap-3 cursor-pointer group">
             <div className="relative flex items-center justify-center">
               <input
@@ -1029,6 +1122,170 @@ function AudioVideoTab() {
               <div className="w-10 h-6 bg-softspace-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
             </div>
             <span className="text-softspace-200 font-medium group-hover:text-white transition-colors">{t('auto_gain_control')}</span>
+          </label>
+
+          {audioVideo.autoGainControl && (
+            <div className="ml-13 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-softspace-400 mb-2">{t('agc_target_level')}</label>
+                <input
+                  type="range"
+                  min="-40"
+                  max="-10"
+                  step="1"
+                  value={audioVideo.autoGainControlTarget || -20}
+                  onChange={(e) => setAudioVideoSettings({ autoGainControlTarget: parseInt(e.target.value, 10) })}
+                  className="w-full"
+                />
+                <div className="text-xs text-softspace-500 mt-1">{audioVideo.autoGainControlTarget || -20}dB</div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-softspace-400 mb-2">{t('agc_max_gain')}</label>
+                <input
+                  type="range"
+                  min="10"
+                  max="60"
+                  step="1"
+                  value={audioVideo.autoGainControlMaxGain || 30}
+                  onChange={(e) => setAudioVideoSettings({ autoGainControlMaxGain: parseInt(e.target.value, 10) })}
+                  className="w-full"
+                />
+                <div className="text-xs text-softspace-500 mt-1">{audioVideo.autoGainControlMaxGain || 30}dB</div>
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-softspace-800 pt-4 mt-4">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <div className="relative flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  className="peer sr-only"
+                  checked={audioVideo.krispEnabled}
+                  onChange={(e) => setAudioVideoSettings({ krispEnabled: e.target.checked })}
+                />
+                <div className="w-10 h-6 bg-softspace-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+              </div>
+              <span className="text-softspace-200 font-medium group-hover:text-white transition-colors">{t('krisp_mode')}</span>
+            </label>
+          </div>
+
+          {audioVideo.krispEnabled && (
+            <div className="ml-13 space-y-3 bg-softspace-950/50 p-4 rounded-xl">
+              <div>
+                <label className="block text-xs font-medium text-softspace-400 mb-2">{t('voice_activity_threshold')}</label>
+                <input
+                  type="range"
+                  min="-70"
+                  max="-30"
+                  step="1"
+                  value={audioVideo.voiceActivityThreshold || -45}
+                  onChange={(e) => setAudioVideoSettings({ voiceActivityThreshold: parseInt(e.target.value, 10) })}
+                  className="w-full"
+                />
+                <div className="text-xs text-softspace-500 mt-1">{audioVideo.voiceActivityThreshold || -45}dB</div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-softspace-400 mb-2">{t('noise_gate_threshold')}</label>
+                <input
+                  type="range"
+                  min="-70"
+                  max="-30"
+                  step="1"
+                  value={audioVideo.noiseGateThreshold || -50}
+                  onChange={(e) => setAudioVideoSettings({ noiseGateThreshold: parseInt(e.target.value, 10) })}
+                  className="w-full"
+                />
+                <div className="text-xs text-softspace-500 mt-1">{audioVideo.noiseGateThreshold || -50}dB</div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-softspace-400 mb-2">{t('mic_volume')}</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  value={audioVideo.micVolume || 1.0}
+                  onChange={(e) => setAudioVideoSettings({ micVolume: parseFloat(e.target.value) })}
+                  className="w-full"
+                />
+                <div className="text-xs text-softspace-500 mt-1">{Math.round((audioVideo.micVolume || 1.0) * 100)}%</div>
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-softspace-800 pt-4 mt-4">
+            <h3 className="text-sm font-bold text-softspace-400 uppercase tracking-wider mb-4">{t('advanced_filters')}</h3>
+            
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <div className="relative flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  className="peer sr-only"
+                  checked={audioVideo.highpassFilter}
+                  onChange={(e) => setAudioVideoSettings({ highpassFilter: e.target.checked })}
+                />
+                <div className="w-10 h-6 bg-softspace-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+              </div>
+              <span className="text-softspace-200 font-medium group-hover:text-white transition-colors">{t('highpass_filter')}</span>
+            </label>
+
+            {audioVideo.highpassFilter && (
+              <div className="ml-13 space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-softspace-400 mb-2">{t('highpass_frequency')}</label>
+                  <input
+                    type="range"
+                    min="50"
+                    max="300"
+                    step="10"
+                    value={audioVideo.highpassFrequency || 150}
+                    onChange={(e) => setAudioVideoSettings({ highpassFrequency: parseInt(e.target.value, 10) })}
+                    className="w-full"
+                  />
+                  <div className="text-xs text-softspace-500 mt-1">{audioVideo.highpassFrequency || 150}Hz</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function DesktopTab() {
+  const { t } = useTranslation();
+  const { minimizeToTray, setMinimizeToTray } = useSettingsStore();
+
+  useEffect(() => {
+    if (window.electron?.setMinimizeToTray) {
+      window.electron.setMinimizeToTray(minimizeToTray);
+    }
+  }, [minimizeToTray]);
+
+  return (
+    <>
+      <h2 className="text-2xl font-bold text-softspace-100 mb-6 flex items-center gap-2">
+        <Monitor size={24} />
+        {t('desktop')}
+      </h2>
+
+      <div className="bg-softspace-900 rounded-2xl p-6 space-y-8">
+        <div>
+          <h3 className="text-sm font-bold text-softspace-400 uppercase tracking-wider mb-4">{t('minimize_to_tray')}</h3>
+          <p className="text-sm text-softspace-300 mb-4">{t('minimize_to_tray_desc')}</p>
+          <label className="flex items-center gap-3 cursor-pointer group">
+            <div className="relative flex items-center justify-center">
+              <input
+                type="checkbox"
+                className="peer sr-only"
+                checked={minimizeToTray}
+                onChange={(e) => setMinimizeToTray(e.target.checked)}
+              />
+              <div className="w-10 h-6 bg-softspace-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+            </div>
+            <span className="text-softspace-200 font-medium group-hover:text-white transition-colors">{t('minimize_to_tray')}</span>
           </label>
         </div>
       </div>

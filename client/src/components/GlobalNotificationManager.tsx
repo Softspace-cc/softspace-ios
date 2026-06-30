@@ -23,6 +23,7 @@ export function GlobalNotificationManager() {
   const setActiveCall = useChatStore(state => state.setActiveCall);
   const navigate = useNavigate();
   const messageSoundRef = useRef<HTMLAudioElement | null>(null);
+  const ezraMessageSoundRef = useRef<HTMLAudioElement | null>(null);
   const processedMessageIdsRef = useRef<Set<string>>(new Set());
 
   // Initialize Capacitor local notifications permissions, channels, click actions and App state change listeners
@@ -31,6 +32,7 @@ export function GlobalNotificationManager() {
 
     let listenerHandle: any = null;
     let appStateHandle: any = null;
+    let watchListenerHandle: any = null;
 
     import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
       LocalNotifications.requestPermissions().then((permission) => {
@@ -82,12 +84,37 @@ export function GlobalNotificationManager() {
       });
     }).catch(err => console.error('Failed to import @capacitor/app', err));
 
+    import('@capacitor/core').then(({ registerPlugin }) => {
+      try {
+        const WatchConnector = registerPlugin<any>('WatchConnector');
+        WatchConnector.addListener('watchMessageReceived', (data: any) => {
+          console.log('Received message from Apple Watch:', data);
+          if (data && data.type === 'status_change' && data.status) {
+            const currentSocket = useChatStore.getState().socket;
+            const currentUser = useAuthStore.getState().user;
+            const currentToken = useAuthStore.getState().token;
+            if (currentUser && currentSocket && currentToken) {
+              currentSocket.emit('presence:set', { status: data.status, customStatus: currentUser.customStatus });
+              useAuthStore.getState().setUser({ ...currentUser, status: data.status });
+            }
+          }
+        }).then((handle: any) => {
+          watchListenerHandle = handle;
+        });
+      } catch (e) {
+        console.warn('Failed to listen to WatchConnector events:', e);
+      }
+    }).catch(err => console.error('Failed to register WatchConnector plugin', err));
+
     return () => {
       if (listenerHandle) {
         listenerHandle.remove();
       }
       if (appStateHandle) {
         appStateHandle.remove();
+      }
+      if (watchListenerHandle) {
+        watchListenerHandle.remove();
       }
     };
   }, [navigate, setActiveCall, setActiveChannel]);
@@ -213,10 +240,18 @@ export function GlobalNotificationManager() {
     messageSoundRef.current.preload = 'auto';
     messageSoundRef.current.load();
 
+    ezraMessageSoundRef.current = new Audio(publicAssetUrl('/sounds/ezra_message_sound.mp3'));
+    ezraMessageSoundRef.current.preload = 'auto';
+    ezraMessageSoundRef.current.load();
+
     return () => {
       if (messageSoundRef.current) {
         messageSoundRef.current.pause();
         messageSoundRef.current = null;
+      }
+      if (ezraMessageSoundRef.current) {
+        ezraMessageSoundRef.current.pause();
+        ezraMessageSoundRef.current = null;
       }
       audioContextRef.current?.close().catch(() => {});
     };
@@ -259,6 +294,7 @@ export function GlobalNotificationManager() {
       if (!msg) return;
       if (msg.messageType === 'CALL_STARTED' || msg.messageType === 'CALL_ENDED') return;
       if (msg.authorId === user.id) return;
+      if (user?.status === 'dnd') return;
 
       // Deduplicate message notifications by message ID
       if (msg.id) {
@@ -288,9 +324,20 @@ export function GlobalNotificationManager() {
       // Only play HTML audio if NOT on Capacitor.
       // Capacitor local notifications handle their own sounds.
       if (!isCapacitorApp()) {
-        if (messageSoundRef.current) {
-          messageSoundRef.current.currentTime = 0;
-          messageSoundRef.current.play().catch(() => {
+        const authorUsername = msg.author?.username?.toLowerCase() || '';
+        const authorDisplayName = msg.author?.displayName?.toLowerCase() || '';
+        const currentUsername = user.username?.toLowerCase() || '';
+        const currentDisplayName = user.displayName?.toLowerCase() || '';
+        
+        const isEzraSender = authorUsername === 'shadow-ezra' || authorUsername.includes('ezra') || authorDisplayName.includes('ezra');
+        const isEzraRecipient = currentUsername === 'shadow-ezra' || currentUsername.includes('ezra') || currentDisplayName.includes('ezra');
+        
+        const isEzra = isEzraSender || isEzraRecipient;
+        const soundRef = isEzra ? ezraMessageSoundRef : messageSoundRef;
+
+        if (soundRef.current) {
+          soundRef.current.currentTime = 0;
+          soundRef.current.play().catch(() => {
             playMessageSound();
           });
         } else {

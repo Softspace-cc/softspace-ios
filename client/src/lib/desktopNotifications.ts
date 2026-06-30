@@ -20,6 +20,11 @@ export function showDesktopNotification(options: DesktopNotificationOptions): vo
   const { title, body, icon, navigationTarget } = options;
 
   if (isCapacitorApp()) {
+    // Sync notification to Apple Watch companion app
+    import('./watchSync').then(({ syncMessageToWatch }) => {
+      void syncMessageToWatch(title, body);
+    }).catch(err => console.error('Failed to sync to Apple Watch:', err));
+
     import('@capacitor/local-notifications').then(({ LocalNotifications }) => {
       LocalNotifications.schedule({
         notifications: [

@@ -18,16 +18,24 @@ echo ""
 
 # 1. Server/Backend updaten
 echo -e "${GREEN}[1/5] Updating Backend (Server)...${NC}"
-cd "$SERVER_DIR" || { echo -e "${RED}Error: Server directory not found!${NC}"; exit 1; }
 
-echo "Installing npm dependencies..."
+# Clean up local node_modules to prevent conflict / Windows-compiled binaries
+cd "$SERVER_DIR"
+rm -rf node_modules package-lock.json
+cd "$CLIENT_DIR"
+rm -rf node_modules package-lock.json
+cd "$BASE_DIR"
+rm -rf node_modules package-lock.json
+
+echo "Installing fresh npm dependencies for all workspaces..."
 npm install
 
+cd "$SERVER_DIR"
 echo "Generating Prisma Client..."
-npx prisma generate
+../node_modules/.bin/prisma generate
 
 echo "Pushing database schema changes..."
-npx prisma db push
+../node_modules/.bin/prisma db push
 
 echo "Restarting PM2 backend process..."
 pm2 restart softspace-backend || echo -e "${RED}Warning: PM2 process 'softspace-backend' not found or failed to restart.${NC}"
@@ -36,18 +44,7 @@ echo ""
 
 # 2. Frontend updaten
 echo -e "${GREEN}[2/5] Updating Frontend (Client)...${NC}"
-cd "$CLIENT_DIR" || { echo -e "${RED}Error: Client directory not found!${NC}"; exit 1; }
-
-echo "Cleaning up corrupted Windows node_modules..."
-rm -rf node_modules package-lock.json
-
-# Also clean the root node_modules since npm workspaces might hoist vite to the root!
-cd "$BASE_DIR"
-rm -rf node_modules package-lock.json
 cd "$CLIENT_DIR"
-
-echo "Installing fresh npm dependencies for Linux..."
-npm install
 
 echo "Building React App (Vite)..."
 npm run build

@@ -219,7 +219,7 @@ export function createSocketServer(httpServer, { clientOrigin }) {
       ack(publicUser(user));
     });
 
-    registerVoiceHandlers(io, socket);
+     registerVoiceHandlers(io, socket);
 
     socket.on('disconnect', async () => {
       const wasDesktop = clientPlatform === 'desktop';

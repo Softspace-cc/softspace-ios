@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import fs from 'fs/promises';
+import path from 'path';
 import prisma from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { httpError } from '../lib/errors.js';
@@ -6,6 +8,7 @@ import { updateChannelSchema } from '../lib/validators.js';
 import { serializeChannel } from '../lib/serializers.js';
 import { Permissions, channelPermissions, hasPermission } from '../lib/permissions.js';
 import { getChannelOrFail, getMembershipOrFail, requirePermission } from '../lib/membership.js';
+import { UPLOAD_DIR } from './uploads.js';
 
 const router = Router();
 
@@ -53,7 +56,20 @@ router.delete('/:channelId', requireAuth, async (req, res, next) => {
   try {
     const channel = await getChannelOrFail(req.params.channelId);
     await requirePermission(req.user.id, channel.serverId, Permissions.MANAGE_CHANNELS);
+
+    // Find all attachments in this channel to delete physically from disk
+    const attachments = await prisma.attachment.findMany({
+      where: { message: { channelId: channel.id } }
+    });
+
     await prisma.channel.delete({ where: { id: channel.id } });
+
+    // Delete physical files
+    for (const att of attachments) {
+      const filePath = path.join(UPLOAD_DIR, path.basename(att.url));
+      fs.unlink(filePath).catch(() => {});
+    }
+
     req.app
       .get('io')
       ?.to(`server:${channel.serverId}`)

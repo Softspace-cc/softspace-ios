@@ -1,0 +1,7 @@
+- fixed bugs with the ban system and unban system
+- fixed physical file leak of deleted attachments by ensuring they are unlinked from disk upon message, channel, DM, or server deletion
+- secured attachment downloads by enforcing authentication and verifying server/DM channel membership permissions
+- implemented rate-limiting on message sending, reactions, and DM creation to prevent spam and server flooding
+- improved CUID/CUID2 DM channel lookup by querying the channel ID directly before falling back to name searches
+- added team chat
+- added the role moderator

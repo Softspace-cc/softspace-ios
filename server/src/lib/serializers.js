@@ -132,6 +132,9 @@ export function serializeMember(member) {
     isMuted: member.isMuted,
     isDeafened: member.isDeafened,
     user: publicUser(member.user),
+    roles: (member.roles ?? [])
+      .map((mr) => mr.role ? serializeRole(mr.role) : null)
+      .filter(Boolean),
     roleIds: (member.roles ?? []).map((mr) => mr.roleId ?? mr.role?.id).filter(Boolean),
   };
 }

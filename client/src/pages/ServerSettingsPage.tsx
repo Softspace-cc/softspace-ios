@@ -120,7 +120,7 @@ export default function ServerSettingsPage() {
   const [cropType, setCropType] = useState<'icon' | 'banner'>('icon');
 
   const isOwner = useMemo(
-    () => Boolean(server && me && (server.ownerId === me.id || me.systemRole === 'CEO')),
+    () => Boolean(server && me && (server.ownerId === me.id || me.systemRole === 'CEO' || me.systemRole === 'MODERATOR')),
     [server, me]
   );
 

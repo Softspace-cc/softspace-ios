@@ -2,10 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --softspace-50: #f2f7f7;
+  --softspace-100: #e2eded;
+  --softspace-200: #c2dad9;
+  --softspace-300: #9bbfbe;
+  --softspace-400: #6ba2a0;
+  --softspace-500: #3f9b96;
+  --softspace-600: #2c847f;
+  --softspace-700: #226763;
+  --softspace-800: #1a2a2b;
+  --softspace-900: #121f20;
+  --softspace-950: #0b1516;
+}
+
+.theme-blue-orange {
+  --softspace-50: #f0f6ff;
+  --softspace-100: #e0edff;
+  --softspace-200: #b3d4ff;
+  --softspace-300: #7cbdff;
+  --softspace-400: #3b82f6;
+  --softspace-500: #2563eb;
+  --softspace-600: #ea580c;
+  --softspace-700: #c2410c;
+  --softspace-800: #17253d;
+  --softspace-900: #0e1726;
+  --softspace-950: #080d16;
+}
+
+body.theme-transitioning,
+body.theme-transitioning * {
+  transition: background-color 2.5s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 2.5s cubic-bezier(0.4, 0, 0.2, 1),
+              color 2.5s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 2.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
 @layer base {
   body {
     font-family: 'Outfit', 'Quicksand', system-ui, -apple-system, sans-serif;
-    @apply bg-softspace-950 text-softspace-50 antialiased selection:bg-softspace-500/30 selection:text-softspace-100;
+    @apply bg-softspace-950 text-softspace-50 antialiased;
+  }
+  
+  ::selection {
+    background-color: color-mix(in srgb, var(--softspace-500) 30%, transparent);
+    color: var(--softspace-100);
   }
   
   h1, h2, h3, h4, h5, h6 {

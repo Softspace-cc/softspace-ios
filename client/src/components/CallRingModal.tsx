@@ -18,10 +18,18 @@ type Caller = {
 export function CallRingModal() {
   const { t } = useTranslation();
   const socket = useChatStore(state => state.socket);
+  const activeCall = useChatStore(state => state.activeCall);
   const setActiveCall = useChatStore(state => state.setActiveCall);
+  const user = useAuthStore(state => state.user);
   const navigate = useNavigate();
   const [incomingCall, setIncomingCall] = useState<{ channelId: string; caller: Caller } | null>(null);
   const callRingSoundRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (activeCall && incomingCall) {
+      setIncomingCall(null);
+    }
+  }, [activeCall, incomingCall]);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const ringIntervalRef = useRef<number | null>(null);
@@ -91,6 +99,10 @@ export function CallRingModal() {
   useEffect(() => {
     if (incomingCall) {
       stopRing();
+      
+      // Do not play ring sound if user is on Do Not Disturb
+      if (user?.status === 'dnd') return;
+
       if (callRingSoundRef.current) {
         callRingSoundRef.current.play().catch(() => {
           playRingBurst();
@@ -114,6 +126,9 @@ export function CallRingModal() {
     const onIncomingRing = (data: { channelId: string; caller: Caller }) => {
       if (useChatStore.getState().activeCall) return;
       setIncomingCall(data);
+
+      // Do not show desktop notification if user is on Do Not Disturb
+      if (user?.status === 'dnd') return;
 
       const displayName = data.caller.displayName || data.caller.username;
       showDesktopNotification({

@@ -202,6 +202,11 @@ export function MemberList({ members, roles, onOpenProfile, onContextMenu, onOpe
                           CEO
                         </span>
                       )}
+                      {member.user?.systemRole === 'MODERATOR' && (
+                        <span className="text-[10px] bg-indigo-500 text-white px-1.5 py-0.5 rounded font-bold uppercase shrink-0 ml-1">
+                          MOD
+                        </span>
+                      )}
                     </div>
                   </button>
                 );

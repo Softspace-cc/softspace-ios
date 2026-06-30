@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import sanitizeHtml from 'sanitize-html';
+import fs from 'fs/promises';
+import path from 'path';
+import rateLimit from 'express-rate-limit';
 import prisma from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { httpError } from '../lib/errors.js';
@@ -13,8 +16,15 @@ import {
 } from '../lib/membership.js';
 import { hasPermission, channelPermissions } from '../lib/permissions.js';
 import { parseRoleMentions, stringifyMentionedRoleIds } from '../lib/mentions.js';
+import { UPLOAD_DIR } from './uploads.js';
 
 const router = Router();
+
+const chatLimiter = rateLimit({
+  windowMs: 5 * 1000, // 5 seconds
+  max: 10, // Max 10 requests per 5 seconds
+  message: { error: 'Too many messages/actions, please slow down.' }
+});
 
 const MESSAGE_INCLUDE = {
   author: true,
@@ -63,7 +73,7 @@ router.get('/channels/:channelId/messages', requireAuth, async (req, res, next) 
   }
 });
 
-router.post('/channels/:channelId/messages', requireAuth, async (req, res, next) => {
+router.post('/channels/:channelId/messages', requireAuth, chatLimiter, async (req, res, next) => {
   try {
     const channel = await getChannelOrFail(req.params.channelId);
     const member = await getMembershipOrFail(req.user.id, channel.serverId);
@@ -73,6 +83,13 @@ router.post('/channels/:channelId/messages', requireAuth, async (req, res, next)
       where: { id: channel.serverId },
       include: { roles: true },
     });
+    
+    if (channel.serverId === 'teamchat') {
+      if (req.user.systemRole === 'MODERATOR' && channel.name !== 'chat') {
+        throw httpError(403, 'cannot_send_messages', 'Moderators can only chat in the chat channel.');
+      }
+    }
+
     const perms = channelPermissions(member, server, channel);
     if (!hasPermission(perms, Permissions.VIEW_CHANNELS)) {
       throw httpError(403, 'missing_permission', 'You do not have permission to view this channel.');
@@ -150,7 +167,7 @@ router.post('/channels/:channelId/messages', requireAuth, async (req, res, next)
   }
 });
 
-router.patch('/messages/:messageId', requireAuth, async (req, res, next) => {
+router.patch('/messages/:messageId', requireAuth, chatLimiter, async (req, res, next) => {
   try {
     const existing = await getMessageOrFail(req.params.messageId);
     if (existing.authorId !== req.user.id) throw httpError(403, 'not_message_author');
@@ -191,7 +208,7 @@ router.patch('/messages/:messageId', requireAuth, async (req, res, next) => {
   }
 });
 
-router.delete('/messages/:messageId', requireAuth, async (req, res, next) => {
+router.delete('/messages/:messageId', requireAuth, chatLimiter, async (req, res, next) => {
   try {
     const message = await getMessageOrFail(req.params.messageId);
     const member = await getMembershipOrFail(req.user.id, message.channel.serverId);
@@ -204,9 +221,22 @@ router.delete('/messages/:messageId', requireAuth, async (req, res, next) => {
     if (!canDelete) {
       canDelete = hasPermission(perms, Permissions.MANAGE_MESSAGES);
     }
+    if (req.user.systemRole === 'CEO' || req.user.systemRole === 'MODERATOR') canDelete = true;
     if (!canDelete) throw httpError(403, 'cannot_delete_message');
 
+    // Find attachments to delete physically from disk
+    const attachments = await prisma.attachment.findMany({
+      where: { messageId: message.id }
+    });
+
     await prisma.message.delete({ where: { id: message.id } });
+    
+    // Delete physical files
+    for (const att of attachments) {
+      const filePath = path.join(UPLOAD_DIR, path.basename(att.url));
+      fs.unlink(filePath).catch(() => {});
+    }
+
     req.app
       .get('io')
       ?.to(`channel:${message.channelId}`)
@@ -217,7 +247,7 @@ router.delete('/messages/:messageId', requireAuth, async (req, res, next) => {
   }
 });
 
-router.put('/messages/:messageId/reactions/:emoji', requireAuth, async (req, res, next) => {
+router.put('/messages/:messageId/reactions/:emoji', requireAuth, chatLimiter, async (req, res, next) => {
   try {
     const data = reactionSchema.parse({ emoji: decodeURIComponent(req.params.emoji) });
     const message = await getMessageOrFail(req.params.messageId);
@@ -245,7 +275,7 @@ router.put('/messages/:messageId/reactions/:emoji', requireAuth, async (req, res
   }
 });
 
-router.delete('/messages/:messageId/reactions/:emoji', requireAuth, async (req, res, next) => {
+router.delete('/messages/:messageId/reactions/:emoji', requireAuth, chatLimiter, async (req, res, next) => {
   try {
     const emoji = decodeURIComponent(req.params.emoji);
     const message = await getMessageOrFail(req.params.messageId);

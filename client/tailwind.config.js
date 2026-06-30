@@ -8,17 +8,17 @@ export default {
     extend: {
       colors: {
         softspace: {
-          50: '#f2f7f7',
-          100: '#e2eded',
-          200: '#c2dad9',
-          300: '#9bbfbe', // muted light teal-gray for secondary text
-          400: '#6ba2a0',
-          500: '#3f9b96', // calm petrol for accents / muted labels
-          600: '#2c847f', // primary actions
-          700: '#226763', // hover / darker accent
-          800: '#1a2a2b', // dark slate-teal card/nav bg
-          900: '#121f20', // deeper panel bg
-          950: '#0b1516', // deepest canvas bg
+          50: 'var(--softspace-50)',
+          100: 'var(--softspace-100)',
+          200: 'var(--softspace-200)',
+          300: 'var(--softspace-300)',
+          400: 'var(--softspace-400)',
+          500: 'var(--softspace-500)',
+          600: 'var(--softspace-600)',
+          700: 'var(--softspace-700)',
+          800: 'var(--softspace-800)',
+          900: 'var(--softspace-900)',
+          950: 'var(--softspace-950)',
         }
       },
       borderRadius: {

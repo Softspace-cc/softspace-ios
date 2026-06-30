@@ -19,6 +19,20 @@ import { api, assetUrl } from '../lib/api';
 import { UserWidget } from '../components/UserWidget';
 import { Menu } from 'lucide-react';
 
+function formatEmojiPreviewText(text: string) {
+  if (!text) return '';
+  let formatted = text.replace(/\[\[ce:(?:EMOJI|GIF):([^:\]]+):[^\]]+\]\]/g, ':$1:');
+  if (formatted.startsWith('-# ')) {
+    formatted = formatted.slice(3);
+  }
+  return formatted
+    .replace(/\*\*([\s\S]+?)\*\*/g, '$1')
+    .replace(/__([\s\S]+?)__/g, '$1')
+    .replace(/_([\s\S]+?)_/g, '$1')
+    .replace(/~~([\s\S]+?)~~/g, '$1')
+    .replace(/\|\|([\s\S]+?)\|\|/g, '[Spoiler]');
+}
+
 type UserSummary = {
   id: string;
   username: string;
@@ -130,6 +144,7 @@ export default function FriendsLayout() {
     socket.on('friend:removed', onChange);
     socket.on('dm:created', onChange);
     socket.on('dm:message_created', onChange);
+    socket.on('dm:removed', onChange);
     return () => {
       socket.off('friend:incoming', onChange);
       socket.off('friend:outgoing', onChange);
@@ -137,6 +152,7 @@ export default function FriendsLayout() {
       socket.off('friend:removed', onChange);
       socket.off('dm:created', onChange);
       socket.off('dm:message_created', onChange);
+      socket.off('dm:removed', onChange);
     };
   }, [socket, refreshFriends, refreshDms]);
 
@@ -150,7 +166,7 @@ export default function FriendsLayout() {
       const res = await api(`/api/dms/${channel.id}/leave`, { method: 'POST' }, token);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(err.message || 'Gruppe konnte nicht verlassen werden.');
+        alert(err.message || t('leave_group_error') || 'Gruppe konnte nicht verlassen werden.');
         return;
       }
       setGroupMenu(null);
@@ -162,7 +178,30 @@ export default function FriendsLayout() {
       console.error(err);
       alert('Gruppe konnte nicht verlassen werden.');
     }
-  }, [token, refreshDms, dmId, navigate]);
+  }, [token, refreshDms, dmId, navigate, t]);
+
+  const handleDeleteChat = useCallback(async (channel: DmChannel) => {
+    if (!token) return;
+    const confirmMsg = t('delete_chat_confirm');
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const res = await api(`/api/dms/${channel.id}`, { method: 'DELETE' }, token);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.message || 'Chat konnte nicht gelöscht werden.');
+        return;
+      }
+      setGroupMenu(null);
+      await refreshDms();
+      if (dmId === channel.id || dmId === channel.name) {
+        navigate('/app');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Chat konnte nicht gelöscht werden.');
+    }
+  }, [token, refreshDms, dmId, navigate, t]);
 
   return (
     <div className="flex h-full relative">
@@ -188,6 +227,30 @@ export default function FriendsLayout() {
             icon={<Users size={16} />}
             label={t('friends')}
           />
+          {(me?.systemRole === 'CEO' || me?.systemRole === 'MODERATOR') && (
+            <SidebarItem
+              active={location.pathname === '/app/channels' && useChatStore.getState().activeServerId === 'teamchat'}
+              onClick={async () => {
+                try {
+                  const res = await api('/api/servers/teamchat', {}, token);
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data.server) {
+                      useServerStore.getState().addServer(data.server);
+                      const channelId = data.server.channels?.[0]?.id || null;
+                      useChatStore.getState().setActiveChannel('teamchat', channelId);
+                      navigate('/app/channels');
+                    }
+                  }
+                } catch (e) {
+                  console.error(e);
+                }
+                setMobileChannelSidebarOpen(false);
+              }}
+              icon={<MessageSquare size={16} />}
+              label="Teamchat"
+            />
+          )}
           {incomingCount > 0 && (
             <SidebarItem
               active={false}
@@ -269,15 +332,12 @@ export default function FriendsLayout() {
                     setMobileChannelSidebarOpen(false);
                   }}
                   onContextMenu={(e) => {
-                    if (channel.isGroup) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const pos = clampMenuPosition(e.clientX, e.clientY);
-                      setGroupMenu({ x: pos.x, y: pos.y, channel });
-                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const pos = clampMenuPosition(e.clientX, e.clientY);
+                    setGroupMenu({ x: pos.x, y: pos.y, channel });
                   }}
                   onTouchStart={(e) => {
-                    if (!channel.isGroup) return;
                     const touch = e.touches[0];
                     if (!touch) return;
                     clearLongPress();
@@ -314,7 +374,7 @@ export default function FriendsLayout() {
                     <div className={`truncate ${hasUnread ? 'font-bold text-white' : 'font-medium'}`}>{display}</div>
                     {channel.lastMessage && (
                       <div className={`text-xs truncate ${hasUnread ? 'text-softspace-200 font-medium' : 'text-softspace-500'}`}>
-                        {channel.lastMessage.content || '...'}
+                        {formatEmojiPreviewText(channel.lastMessage.content) || '...'}
                       </div>
                     )}
                   </div>
@@ -364,15 +424,32 @@ export default function FriendsLayout() {
             onContextMenu={(e) => e.preventDefault()}
           >
             <div className="px-4 py-1 text-xs font-bold text-softspace-400 mb-1 border-b border-softspace-800 truncate">
-              {groupMenu.channel.name || 'Gruppe'}
+              {(() => {
+                const channel = groupMenu.channel;
+                if (channel.isGroup) {
+                  return channel.name || t('group');
+                }
+                const otherMember = channel.members.find(m => m.userId !== me?.id);
+                return channel.name ?? otherMember?.user?.displayName ?? otherMember?.user?.username ?? t('direct_message');
+              })()}
             </div>
-            <button
-              type="button"
-              onClick={() => handleLeaveGroup(groupMenu.channel)}
-              className="w-full px-4 py-2 text-left hover:bg-red-500/20 text-red-400 transition-colors"
-            >
-              Gruppe verlassen
-            </button>
+            {groupMenu.channel.isGroup ? (
+              <button
+                type="button"
+                onClick={() => handleLeaveGroup(groupMenu.channel)}
+                className="w-full px-4 py-2 text-left hover:bg-red-500/20 text-red-400 transition-colors"
+              >
+                {t('leave_group')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleDeleteChat(groupMenu.channel)}
+                className="w-full px-4 py-2 text-left hover:bg-red-500/20 text-red-400 transition-colors"
+              >
+                {t('delete_chat')}
+              </button>
+            )}
           </div>
         </>
       )}

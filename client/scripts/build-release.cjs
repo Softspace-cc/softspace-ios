@@ -84,6 +84,10 @@ function sha256File(filePath) {
   return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
 }
 
+function sha512File(filePath) {
+  return crypto.createHash('sha512').update(fs.readFileSync(filePath)).digest('hex');
+}
+
 function writeReleaseConfig() {
   const payloadUrl = `${releaseBaseUrl.replace(/\/$/, '')}/${payloadFileName}`;
   const sha256 = sha256File(payloadZip);
@@ -96,12 +100,59 @@ function writeReleaseConfig() {
   return config;
 }
 
-function publishPayloadZip() {
+function publishReleaseAssets() {
   fs.mkdirSync(serverReleasesDir, { recursive: true });
-  const target = path.join(serverReleasesDir, payloadFileName);
-  fs.copyFileSync(payloadZip, target);
-  console.log(`Server payload → ${target}`);
+  
+  // Copy payload zip
+  const targetZip = path.join(serverReleasesDir, payloadFileName);
+  fs.copyFileSync(payloadZip, targetZip);
+  console.log(`Server payload ZIP → ${targetZip}`);
+  
+  // Copy Setup EXE
+  const targetSetup = path.join(serverReleasesDir, `SoftSpace-Setup-${version}.exe`);
+  fs.copyFileSync(setupExe, targetSetup);
+  console.log(`Server Setup EXE   → ${targetSetup}`);
 }
+
+function writeLatestYml() {
+  const stats = fs.statSync(setupExe);
+  const sha512 = sha512File(setupExe);
+  const size = stats.size;
+  const releaseDate = new Date().toISOString();
+
+  let notesContent = '';
+  const notesFile = path.join(clientDir, 'release-notes.md');
+  if (fs.existsSync(notesFile)) {
+    const rawNotes = fs.readFileSync(notesFile, 'utf8').trim();
+    if (rawNotes) {
+      const formattedNotes = rawNotes
+        .split('\n')
+        .map(line => `  ${line}`)
+        .join('\n');
+      notesContent = `\nreleaseNotes: |\n${formattedNotes}`;
+    }
+  }
+
+  const ymlContent = `version: ${version}
+files:
+  - url: SoftSpace-Setup-${version}.exe
+    sha512: ${sha512}
+    size: ${size}
+path: SoftSpace-Setup-${version}.exe
+sha512: ${sha512}
+releaseDate: ${releaseDate}${notesContent}
+`;
+
+  const ymlPath = path.join(releaseDir, 'latest.yml');
+  fs.writeFileSync(ymlPath, ymlContent);
+  console.log(`latest.yml → ${ymlPath}`);
+
+  // Also copy to server releases directory
+  const serverYmlPath = path.join(serverReleasesDir, 'latest.yml');
+  fs.writeFileSync(serverYmlPath, ymlContent);
+  console.log(`Server latest.yml → ${serverYmlPath}`);
+}
+
 
 function verifyElectronBuild() {
   const payloadExe = path.join(unpackedDir, 'SoftSpace.exe');
@@ -118,17 +169,36 @@ function verifyElectronBuild() {
   console.log(`App payload ready → ${unpackedDir}`);
 }
 
+function writeAppUpdateYml() {
+  const resourcesDir = path.join(unpackedDir, 'resources');
+  fs.mkdirSync(resourcesDir, { recursive: true });
+  const ymlContent = `provider: generic
+url: ${releaseBaseUrl}
+updaterCacheDirName: softspace-updater
+`;
+  const ymlPath = path.join(resourcesDir, 'app-update.yml');
+  fs.writeFileSync(ymlPath, ymlContent);
+  console.log(`app-update.yml → ${ymlPath}`);
+}
+
 console.log('=== SoftSpace release build ===');
 
 run('npm run build:electron', clientDir);
 run('npx electron-builder --win dir', clientDir);
 verifyElectronBuild();
+writeAppUpdateYml();
 trimPayload(unpackedDir);
 createPayloadZip(unpackedDir, payloadZip);
 console.log(`Payload zip → ${payloadZip} (${formatSize(fs.statSync(payloadZip).size)})`);
 
 writeReleaseConfig();
-publishPayloadZip();
+
+// Sync version to installer package.json to avoid build name mismatch
+const installerPackageJsonPath = path.join(installerDir, 'package.json');
+const installerPackageJson = JSON.parse(fs.readFileSync(installerPackageJsonPath, 'utf8'));
+installerPackageJson.version = version;
+fs.writeFileSync(installerPackageJsonPath, JSON.stringify(installerPackageJson, null, 2) + '\n');
+console.log(`Synced version ${version} to installer package.json`);
 
 console.log('\nBuilding small portable Setup EXE (ca. 1–3 Min.)…\n');
 run('npm run electron:build', installerDir);
@@ -137,6 +207,9 @@ if (!fs.existsSync(setupExe)) {
   throw new Error(`Installer exe not found at ${setupExe}`);
 }
 
+publishReleaseAssets();
+writeLatestYml();
+
 console.log('\nDone.');
 console.log(`Weitergeben: ${setupExe} (${formatSize(fs.statSync(setupExe).size)})`);
-console.log(`Auf Server deployen: server/releases/windows/${payloadFileName}`);
+console.log(`Auf Server deployen: server/releases/windows/${payloadFileName} und SoftSpace-Setup-${version}.exe`);

@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import sanitizeHtml from 'sanitize-html';
+import fs from 'fs/promises';
+import path from 'path';
+import rateLimit from 'express-rate-limit';
 import prisma from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { httpError } from '../lib/errors.js';
@@ -14,8 +17,21 @@ import {
   serializeDmMessage,
   serializeReaction,
 } from '../lib/serializers.js';
+import { UPLOAD_DIR } from './uploads.js';
 
 const router = Router();
+
+const dmCreateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // Max 10 DMs created per minute
+  message: { error: 'Too many DMs created, please wait.' }
+});
+
+const dmChatLimiter = rateLimit({
+  windowMs: 5 * 1000, // 5 seconds
+  max: 10, // Max 10 requests per 5 seconds
+  message: { error: 'Too many messages/actions, please slow down.' }
+});
 
 const DM_MESSAGE_INCLUDE = {
   author: true,
@@ -29,21 +45,28 @@ function sanitizeContent(content) {
 }
 
 async function ensureDmMember(channelIdOrName, userId) {
-  let channelId = channelIdOrName;
-  // If the parameter is not a CUID, we try to find the group by name
-  if (!channelIdOrName.startsWith('c') || channelIdOrName.length !== 25) {
-    const channel = await prisma.dMChannel.findFirst({
-      where: { name: channelIdOrName, isGroup: true, members: { some: { userId } } },
-    });
-    if (!channel) throw httpError(404, 'not_found');
-    channelId = channel.id;
+  // 1. Try to find membership by channel ID first
+  let member = await prisma.dMChannelMember.findUnique({
+    where: { dmChannelId_userId: { dmChannelId: channelIdOrName, userId } },
+  });
+
+  if (member) {
+    return { member, channelId: channelIdOrName };
   }
 
-  const member = await prisma.dMChannelMember.findUnique({
-    where: { dmChannelId_userId: { dmChannelId: channelId, userId } },
+  // 2. If not found by ID, search by group name (fallback)
+  const channel = await prisma.dMChannel.findFirst({
+    where: { name: channelIdOrName, isGroup: true, members: { some: { userId } } },
   });
+  if (!channel) throw httpError(404, 'not_found');
+
+  // Fetch membership for the resolved channel
+  member = await prisma.dMChannelMember.findUnique({
+    where: { dmChannelId_userId: { dmChannelId: channel.id, userId } },
+  });
+  
   if (!member) throw httpError(403, 'not_a_dm_member');
-  return { member, channelId };
+  return { member, channelId: channel.id };
 }
 
 async function ensureDmChannel(channelIdOrName, userId) {
@@ -93,7 +116,7 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/', requireAuth, async (req, res, next) => {
+router.post('/', requireAuth, dmCreateLimiter, async (req, res, next) => {
   try {
     const data = createDmSchema.parse(req.body);
     const otherIds = [...new Set(data.userIds.filter((id) => id !== req.user.id))];
@@ -232,6 +255,45 @@ router.post('/:channelId/leave', requireAuth, async (req, res, next) => {
   }
 });
 
+router.delete('/:channelId', requireAuth, dmChatLimiter, async (req, res, next) => {
+  try {
+    const { channelId } = await ensureDmMember(req.params.channelId, req.user.id);
+    const channel = await prisma.dMChannel.findUnique({
+      where: { id: channelId },
+      include: { members: true }
+    });
+    if (!channel) throw httpError(404, 'not_found');
+
+    // Find all attachments in this DM channel to delete physically from disk
+    const attachments = await prisma.attachment.findMany({
+      where: { dmMessage: { dmChannelId: channelId } }
+    });
+
+    // Break self-referential replyTo relationships to avoid foreign key cascading issues in SQLite/Postgres
+    await prisma.dMMessage.updateMany({
+      where: { dmChannelId: channelId },
+      data: { replyToId: null }
+    });
+
+    await prisma.dMChannel.delete({ where: { id: channelId } });
+
+    // Delete physical files
+    for (const att of attachments) {
+      const filePath = path.join(UPLOAD_DIR, path.basename(att.url));
+      fs.unlink(filePath).catch(() => {});
+    }
+
+    const io = req.app.get('io');
+    for (const m of channel.members) {
+      io?.to(`user:${m.userId}`).emit('dm:removed', { channelId });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/:channelId/messages', requireAuth, async (req, res, next) => {
   try {
     const { channelId } = await ensureDmMember(req.params.channelId, req.user.id);
@@ -252,7 +314,7 @@ router.get('/:channelId/messages', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/:channelId/messages', requireAuth, async (req, res, next) => {
+router.post('/:channelId/messages', requireAuth, dmChatLimiter, async (req, res, next) => {
   try {
     const { channelId } = await ensureDmMember(req.params.channelId, req.user.id);
     const data = sendMessageSchema.parse(req.body);
@@ -332,7 +394,7 @@ router.post('/:channelId/messages', requireAuth, async (req, res, next) => {
   }
 });
 
-router.patch('/messages/:messageId', requireAuth, async (req, res, next) => {
+router.patch('/messages/:messageId', requireAuth, dmChatLimiter, async (req, res, next) => {
   try {
     const message = await prisma.dMMessage.findUnique({ where: { id: req.params.messageId } });
     if (!message) throw httpError(404, 'message_not_found');
@@ -359,12 +421,27 @@ router.patch('/messages/:messageId', requireAuth, async (req, res, next) => {
   }
 });
 
-router.delete('/messages/:messageId', requireAuth, async (req, res, next) => {
+router.delete('/messages/:messageId', requireAuth, dmChatLimiter, async (req, res, next) => {
   try {
     const message = await prisma.dMMessage.findUnique({ where: { id: req.params.messageId } });
     if (!message) throw httpError(404, 'message_not_found');
-    if (message.authorId !== req.user.id) throw httpError(403, 'not_message_author');
+    let canDelete = message.authorId === req.user.id;
+    if (req.user.systemRole === 'CEO' || req.user.systemRole === 'MODERATOR') canDelete = true;
+    if (!canDelete) throw httpError(403, 'not_message_author');
+
+    // Find attachments to delete physically from disk
+    const attachments = await prisma.attachment.findMany({
+      where: { dmMessageId: message.id }
+    });
+
     await prisma.dMMessage.delete({ where: { id: message.id } });
+
+    // Delete physical files
+    for (const att of attachments) {
+      const filePath = path.join(UPLOAD_DIR, path.basename(att.url));
+      fs.unlink(filePath).catch(() => {});
+    }
+
     const io = req.app.get('io');
     const members = await prisma.dMChannelMember.findMany({
       where: { dmChannelId: message.dmChannelId },
@@ -381,7 +458,7 @@ router.delete('/messages/:messageId', requireAuth, async (req, res, next) => {
   }
 });
 
-router.put('/messages/:messageId/reactions/:emoji', requireAuth, async (req, res, next) => {
+router.put('/messages/:messageId/reactions/:emoji', requireAuth, dmChatLimiter, async (req, res, next) => {
   try {
     const data = reactionSchema.parse({ emoji: decodeURIComponent(req.params.emoji) });
     const message = await prisma.dMMessage.findUnique({ where: { id: req.params.messageId } });
@@ -414,7 +491,7 @@ router.put('/messages/:messageId/reactions/:emoji', requireAuth, async (req, res
   }
 });
 
-router.delete('/messages/:messageId/reactions/:emoji', requireAuth, async (req, res, next) => {
+router.delete('/messages/:messageId/reactions/:emoji', requireAuth, dmChatLimiter, async (req, res, next) => {
   try {
     const emoji = decodeURIComponent(req.params.emoji);
     const message = await prisma.dMMessage.findUnique({ where: { id: req.params.messageId } });

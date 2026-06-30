@@ -20,6 +20,8 @@ import blogRoutes from './routes/blog.js';
 import releasesRoutes, { RELEASES_DIR } from './routes/releases.js';
 import statusRoutes from './routes/status.js';
 import betaRoutes from './routes/beta.js';
+import backendRoutes from './routes/backend.js';
+import { getBackendConfigSync } from './lib/backendConfig.js';
 
 import { errorHandler } from './middleware/error.js';
 import { createSocketServer } from './socket/index.js';
@@ -76,6 +78,22 @@ app.use(cors({
 
 app.use(express.json());
 
+// Middleware to simulate offline state
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/backend')) {
+    return next();
+  }
+  const config = getBackendConfigSync();
+  if (config && config.simulateOffline) {
+    res.setHeader('Retry-After', '30');
+    return res.status(503).json({
+      error: 'Service Unavailable',
+      message: 'Softspace primary backend is temporarily offline for maintenance/simulation.',
+    });
+  }
+  next();
+});
+
 // Disable caching for API routes (except release downloads)
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/releases')) {
@@ -103,6 +121,7 @@ app.use('/api/blog', blogRoutes);
 app.use('/api/releases', releasesRoutes);
 app.use('/api/status', statusRoutes);
 app.use('/api/beta', betaRoutes);
+app.use('/api/backend', backendRoutes);
 
 // Static uploads directory
 app.use('/uploads', express.static(resolve(UPLOAD_DIR)));

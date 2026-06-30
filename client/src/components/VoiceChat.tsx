@@ -20,6 +20,7 @@ import { applyCameraEncoding, applyScreenShareEncoding } from '../lib/webrtcEnco
 import { useAuthStore, type User } from '../store/useAuthStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { ScreenSourcePicker } from './ScreenSourcePicker';
+import { AudioProcessor } from '../lib/audioProcessing';
 
 type ExistingPeer = {
   userId: string;
@@ -198,6 +199,7 @@ export default function VoiceChat({
   const token = useAuthStore(state => state.token);
   const currentUser = useAuthStore(state => state.user);
   const audioVideoSettings = useSettingsStore(state => state.audioVideo);
+  const getAudioProcessingConfig = useSettingsStore(state => state.getAudioProcessingConfig);
 
   const [participants, setParticipants] = useState<Record<string, Participant>>({});
   const [joined, setJoined] = useState(false);
@@ -229,6 +231,7 @@ export default function VoiceChat({
   const videoElementsRef = useRef<Record<string, HTMLVideoElement>>({});
   const selfVideoRef = useRef<HTMLVideoElement | null>(null);
   const selfScreenRef = useRef<HTMLVideoElement | null>(null);
+  const audioProcessorRef = useRef<AudioProcessor | null>(null);
 
   const iceServers = useMemo(() => buildIceServers(), []);
 
@@ -293,8 +296,12 @@ export default function VoiceChat({
           console.error('Failed to apply audio constraints', err);
         });
       }
+      // Update audio processor config live
+      if (audioProcessorRef.current) {
+        audioProcessorRef.current.updateConfig(getAudioProcessingConfig());
+      }
     }
-  }, [audioVideoSettings]);
+  }, [audioVideoSettings, getAudioProcessingConfig]);
 
   useEffect(() => {
     for (const audio of Object.values(audioElementsRef.current)) {
@@ -520,7 +527,12 @@ export default function VoiceChat({
           localStream.getTracks().forEach(t => t.stop());
           return;
         }
-        localStreamRef.current = localStream;
+
+        // Apply enhanced audio processing (Krisp-style)
+        const audioConfig = getAudioProcessingConfig();
+        audioProcessorRef.current = new AudioProcessor();
+        const processedStream = audioProcessorRef.current.attachStream(localStream, audioConfig);
+        localStreamRef.current = processedStream;
 
         s.emit(
           'voice:join',
@@ -798,6 +810,10 @@ export default function VoiceChat({
       const local = localStreamRef.current;
       localStreamRef.current = null;
       local?.getTracks().forEach(t => t.stop());
+
+      // Stop audio processor
+      audioProcessorRef.current?.stop();
+      audioProcessorRef.current = null;
 
       const screen = screenStreamRef.current;
       screenStreamRef.current = null;
@@ -1338,6 +1354,7 @@ function ParticipantTile({
                 CEO
               </span>
             )}
+
           </div>
           <div className="text-xs text-softspace-500 mt-0.5 truncate">@{participant.user?.username ?? '...'}</div>
         </div>
@@ -1359,6 +1376,7 @@ function ParticipantTile({
                   CEO
                 </span>
               )}
+
             </div>
             {participant.screen && <div className="text-xs text-indigo-300 font-medium">{t('voice_screen_sharing')}</div>}
           </div>
@@ -1453,6 +1471,7 @@ function SelfTile({
               CEO
             </span>
           )}
+
         </div>
         <div className="text-xs text-softspace-500 mt-0.5 truncate">@{user?.username ?? '...'}</div>
       </div>

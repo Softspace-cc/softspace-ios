@@ -36,6 +36,8 @@ export const BUILTIN_PRESENCE_RULES: PresenceRule[] = [
   // Games
   { processName: 'Minecraft.exe', displayName: 'Minecraft', type: 'GAME', showTitle: true, iconUrl: icon('minecraft', '#62B47A'), accentColor: '#62B47A' },
   { processName: 'MinecraftLauncher.exe', displayName: 'Minecraft', type: 'GAME', showTitle: false, iconUrl: icon('minecraft', '#62B47A'), accentColor: '#62B47A' },
+  { processName: 'javaw.exe', displayName: 'Minecraft', type: 'GAME', showTitle: true, iconUrl: icon('minecraft', '#62B47A'), accentColor: '#62B47A' },
+  { processName: 'java.exe', displayName: 'Minecraft', type: 'GAME', showTitle: true, iconUrl: icon('minecraft', '#62B47A'), accentColor: '#62B47A' },
   { processName: 'RobloxPlayerBeta.exe', displayName: 'Roblox', type: 'GAME', showTitle: true, iconUrl: icon('roblox', '#000000'), accentColor: '#E2231A' },
   { processName: 'FortniteClient-Win64-Shipping.exe', displayName: 'Fortnite', type: 'GAME', showTitle: false, iconUrl: icon('epicgames', '#313131'), accentColor: '#8A2BE2' },
   { processName: 'VALORANT-Win64-Shipping.exe', displayName: 'VALORANT', type: 'GAME', showTitle: false, iconUrl: icon('riotgames', '#EB0029'), accentColor: '#FF4655' },

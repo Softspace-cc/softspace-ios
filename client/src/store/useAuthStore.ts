@@ -46,14 +46,27 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem('softspace_token', token);
     localStorage.setItem('softspace_user', JSON.stringify(user));
     set({ user, token });
+    if (user.status) {
+      import('../lib/watchSync').then(({ syncPresenceToWatch }) => {
+        void syncPresenceToWatch(user.status as any);
+      }).catch(() => {});
+    }
   },
   setUser: (user) => {
     localStorage.setItem('softspace_user', JSON.stringify(user));
     set({ user });
+    if (user.status) {
+      import('../lib/watchSync').then(({ syncPresenceToWatch }) => {
+        void syncPresenceToWatch(user.status as any);
+      }).catch(() => {});
+    }
   },
   logout: () => {
     localStorage.removeItem('softspace_token');
     localStorage.removeItem('softspace_user');
     set({ user: null, token: null });
+    import('../lib/watchSync').then(({ syncPresenceToWatch }) => {
+      void syncPresenceToWatch('offline');
+    }).catch(() => {});
   },
 }));

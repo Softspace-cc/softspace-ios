@@ -1,26 +1,37 @@
+import { useBackendStore } from '../store/useBackendStore';
+
 // Central API + socket configuration. Override via Vite env vars
 // (VITE_API_URL, VITE_SOCKET_URL) at build time for production.
 const configuredApiUrl =
   (import.meta.env.VITE_API_URL as string | undefined) ?? 'https://softspace.cc';
 
 export function resolveApiUrl() {
-  if (typeof window !== 'undefined' && window.location.hostname === 'api.softspace.cc') {
-    return window.location.origin;
+  try {
+    return useBackendStore.getState().activeUrl;
+  } catch (e) {
+    if (typeof window !== 'undefined' && window.location.hostname === 'api.softspace.cc') {
+      return window.location.origin;
+    }
+    return configuredApiUrl;
   }
-  return configuredApiUrl;
 }
 
-export const API_URL = configuredApiUrl;
+export function resolveSocketUrl() {
+  return resolveApiUrl();
+}
 
-export const SOCKET_URL =
-  (import.meta.env.VITE_SOCKET_URL as string | undefined) ?? 'https://softspace.cc';
+// Deprecated constants kept for legacy imports - prefer resolveApiUrl()
+export const API_URL = configuredApiUrl;
+export const SOCKET_URL = configuredApiUrl;
 
 /** Build a full asset URL out of an attachment / avatar / icon URL. */
 export function assetUrl(path: string | null | undefined): string {
   if (!path) return '';
   if (/^https?:\/\//i.test(path) || path.startsWith('data:')) return path;
-  if (path.startsWith('/')) return `${API_URL}${path}`;
-  return `${API_URL}/${path}`;
+  
+  const base = resolveApiUrl();
+  if (path.startsWith('/')) return `${base}${path}`;
+  return `${base}/${path}`;
 }
 
 /** Build a URL for files from `public/` that works on web and Electron `file://`. */
@@ -40,7 +51,8 @@ export async function api(
   options: RequestInit = {},
   token?: string | null
 ): Promise<Response> {
-  let url = path.startsWith('http') ? path : `${resolveApiUrl()}${path}`;
+  const activeUrl = resolveApiUrl();
+  let url = path.startsWith('http') ? path : `${activeUrl}${path}`;
   
   // Cache busting for GET requests
   if (!options.method || options.method.toUpperCase() === 'GET') {
@@ -65,7 +77,28 @@ export async function api(
     cache: 'no-store'
   };
   
-  return fetch(url, fetchOptions);
+  try {
+    const res = await fetch(url, fetchOptions);
+    if (!res.ok && (res.status === 502 || res.status === 503 || res.status === 504)) {
+      // Primary / active backend down, try failover
+      const success = await useBackendStore.getState().handleRequestFailure();
+      if (success) {
+        // Retry fetch with new activeUrl
+        const retryUrl = path.startsWith('http') ? path : `${resolveApiUrl()}${path}`;
+        return fetch(retryUrl, fetchOptions);
+      }
+    }
+    return res;
+  } catch (err) {
+    // Network connectivity failure
+    const success = await useBackendStore.getState().handleRequestFailure();
+    if (success) {
+      // Retry fetch with new activeUrl
+      const retryUrl = path.startsWith('http') ? path : `${resolveApiUrl()}${path}`;
+      return fetch(retryUrl, fetchOptions);
+    }
+    throw err;
+  }
 }
 
 /** Convenience helper that JSON-encodes the body and parses the JSON response. */

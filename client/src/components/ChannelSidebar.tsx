@@ -24,6 +24,8 @@ import {
 import { useLayoutStore } from '../store/useLayoutStore';
 
 import { UserWidget } from './UserWidget';
+import { useAuthStore } from '../store/useAuthStore';
+import { computeChannelPermissions, hasPermission, Permissions } from '../lib/permissions';
 
 export type ChannelInfo = {
   id: string;
@@ -52,6 +54,7 @@ export function ChannelSidebar({
   activeId,
   token,
   canManageChannels,
+  myMemberInfo,
   onCreate,
   onCreateInCategory,
   onEditChannel,
@@ -62,12 +65,14 @@ export function ChannelSidebar({
   activeId: string;
   token: string | null;
   canManageChannels: boolean;
+  myMemberInfo: any;
   onCreate: () => void;
   onCreateInCategory?: (categoryId: string) => void;
   onEditChannel?: (c: ChannelInfo) => void;
   onChannelsChange: (channels: ChannelInfo[]) => void;
 }) {
   const { t } = useTranslation();
+  const me = useAuthStore((state) => state.user);
   const setActiveChannel = useChatStore((state) => state.setActiveChannel);
   const voiceStates = useChatStore((state) => state.voiceStates);
   const setMobileChannelSidebarOpen = useLayoutStore((state) => state.setMobileChannelSidebarOpen);
@@ -78,7 +83,23 @@ export function ChannelSidebar({
   const [isSaving, setIsSaving] = useState(false);
 
   const channels = server?.channels ?? [];
-  const tree = useMemo(() => buildChannelTree(channels), [channels]);
+  const visibleChannelsList = useMemo(() => {
+    return channels.filter((c) => {
+      if (c.type === 'CATEGORY') {
+        if (canManageChannels) return true;
+        const childChannels = channels.filter(ch => ch.parentId === c.id);
+        const hasVisibleChild = childChannels.some(ch => {
+          const perms = computeChannelPermissions(me, myMemberInfo, server, ch);
+          return hasPermission(perms, Permissions.VIEW_CHANNELS);
+        });
+        return hasVisibleChild;
+      }
+      const perms = computeChannelPermissions(me, myMemberInfo, server, c);
+      return hasPermission(perms, Permissions.VIEW_CHANNELS);
+    });
+  }, [channels, me, myMemberInfo, server, canManageChannels]);
+
+  const tree = useMemo(() => buildChannelTree(visibleChannelsList), [visibleChannelsList]);
 
   const persistReorder = useCallback(
     async (nextChannels: ChannelInfo[]) => {
@@ -423,6 +444,11 @@ function VoiceRosterRow({ member }: { member: VoiceMember }) {
       {member.user?.systemRole === 'CEO' && (
         <span className="text-[9px] bg-orange-500 text-white px-1 py-0.5 rounded font-bold uppercase shrink-0">
           CEO
+        </span>
+      )}
+      {member.user?.systemRole === 'MODERATOR' && (
+        <span className="text-[9px] bg-indigo-500 text-white px-1 py-0.5 rounded font-bold uppercase shrink-0">
+          MOD
         </span>
       )}
       <div className="ml-auto flex items-center gap-1 shrink-0 pl-1">

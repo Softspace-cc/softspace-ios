@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import fs from 'fs/promises';
+import path from 'path';
 import prisma from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { httpError } from '../lib/errors.js';
@@ -17,6 +19,7 @@ import {
   hasPermission,
 } from '../lib/permissions.js';
 import { getMembershipOrFail, requirePermission, joinVisibleChannelRooms } from '../lib/membership.js';
+import { UPLOAD_DIR } from './uploads.js';
 
 const router = Router();
 
@@ -187,6 +190,62 @@ router.post('/', requireAuth, async (req, res, next) => {
 
 router.get('/:serverId', requireAuth, async (req, res, next) => {
   try {
+    if (req.params.serverId === 'teamchat') {
+      if (req.user.systemRole !== 'CEO' && req.user.systemRole !== 'MODERATOR') {
+        throw httpError(403, 'forbidden');
+      }
+
+      // Ensure server exists
+      let teamServer = await prisma.serverGuild.findUnique({ where: { id: 'teamchat' } });
+      if (!teamServer) {
+        teamServer = await prisma.serverGuild.create({
+          data: {
+            id: 'teamchat',
+            name: 'Teamchat',
+            ownerId: req.user.id, // first user to trigger it becomes owner
+          }
+        });
+        const everyoneRole = await prisma.role.create({
+          data: {
+            serverId: teamServer.id,
+            name: '@everyone',
+            color: '#a89cd6',
+            position: 0,
+            permissions: DEFAULT_MEMBER_PERMS,
+            isDefault: true,
+          }
+        });
+        const channels = ['announcements', 'chat', 'events', 'updates-changelogs', 'teamupdates'];
+        for (let i = 0; i < channels.length; i++) {
+          await prisma.channel.create({
+            data: {
+              serverId: teamServer.id,
+              name: channels[i],
+              type: 'TEXT',
+              position: i
+            }
+          });
+        }
+      }
+
+      const existing = await prisma.serverMember.findUnique({
+        where: { userId_serverId: { userId: req.user.id, serverId: 'teamchat' } }
+      });
+      if (!existing) {
+        const member = await prisma.serverMember.create({
+          data: { userId: req.user.id, serverId: 'teamchat' }
+        });
+        const everyoneRole = await prisma.role.findFirst({
+          where: { serverId: 'teamchat', isDefault: true }
+        });
+        if (everyoneRole) {
+          await prisma.serverMemberRole.create({
+            data: { memberId: member.id, roleId: everyoneRole.id }
+          });
+        }
+      }
+    }
+
     const member = await getMembershipOrFail(req.user.id, req.params.serverId);
     const server = await prisma.serverGuild.findUnique({
       where: { id: req.params.serverId },
@@ -234,7 +293,20 @@ router.delete('/:serverId', requireAuth, async (req, res, next) => {
     if (server.ownerId !== req.user.id && req.user.systemRole !== 'CEO') {
       throw httpError(403, 'only_owner_can_delete');
     }
+
+    // Find all attachments in all channels of this server to delete physically from disk
+    const attachments = await prisma.attachment.findMany({
+      where: { message: { channel: { serverId: server.id } } }
+    });
+
     await prisma.serverGuild.delete({ where: { id: server.id } });
+
+    // Delete physical files
+    for (const att of attachments) {
+      const filePath = path.join(UPLOAD_DIR, path.basename(att.url));
+      fs.unlink(filePath).catch(() => {});
+    }
+
     req.app.get('io')?.to(`server:${server.id}`).emit('server:deleted', { serverId: server.id });
     res.json({ ok: true });
   } catch (err) {

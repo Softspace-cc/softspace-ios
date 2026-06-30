@@ -25,7 +25,8 @@ import {
   ChevronUp,
   ChevronDown,
   GripHorizontal,
-  Upload
+  Upload,
+  Palette
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useChatStore } from '../store/useChatStore';
@@ -35,10 +36,12 @@ import { format } from 'date-fns';
 import { de as deLocale, enUS as enLocale } from 'date-fns/locale';
 import UserProfileModal from './UserProfileModal';
 import { MemberList } from './MemberList';
-import { api, assetUrl, API_URL } from '../lib/api';
+import { api, assetUrl, resolveApiUrl } from '../lib/api';
 import { ChannelSidebar } from './ChannelSidebar';
 import { UserBadges } from './UserBadges';
+import { computeChannelPermissions, hasPermission, Permissions } from '../lib/permissions';
 import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
+import SketchpadModal from './SketchpadModal';
 
 type ChatUser = {
   id: string;
@@ -182,16 +185,27 @@ function renderCustomEmojiInline(
   nameEncoded: string,
   urlEncoded: string,
   key: string,
-  compact = false
+  compact = false,
+  jumbo = false
 ) {
   const name = decodeURIComponent(nameEncoded);
   const url = assetUrl(decodeURIComponent(urlEncoded));
+  
+  const hoverScaleClass = compact
+    ? 'transition-transform duration-100 hover:scale-110 active:scale-95'
+    : 'transition-transform duration-150 hover:scale-110 active:scale-95';
+
   if (type === 'GIF') {
     return (
       <span
         key={key}
-        className={`inline-flex align-middle overflow-hidden rounded-md border border-softspace-700 bg-softspace-900 mx-0.5 ${compact ? 'h-7 max-w-[56px]' : 'h-14 max-w-[120px]'
-          }`}
+        className={`inline-flex align-middle overflow-hidden rounded-md mx-0.5 ${hoverScaleClass} ${
+          jumbo
+            ? 'h-28 max-w-[240px]'
+            : compact
+              ? 'h-7 max-w-[56px] border border-softspace-700 bg-softspace-900'
+              : 'h-16 max-w-[140px] border border-softspace-700 bg-softspace-900'
+        }`}
         title={`:${name}:`}
       >
         <img src={url} alt={name} className="h-full w-full object-cover" />
@@ -205,9 +219,136 @@ function renderCustomEmojiInline(
       src={url}
       alt={name}
       title={`:${name}:`}
-      className={`inline-block align-text-bottom mx-0.5 ${compact ? 'h-6 w-6' : 'h-8 w-8'}`}
+      className={`inline-block align-text-bottom mx-0.5 ${hoverScaleClass} ${
+        compact
+          ? 'h-6 w-6'
+          : jumbo
+            ? 'h-16 w-16'
+            : 'h-9 w-9'
+      }`}
     />
   );
+}
+
+function Spoiler({ children }: { children: React.ReactNode }) {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <span
+      onClick={(e) => {
+        e.stopPropagation();
+        setRevealed(!revealed);
+      }}
+      className={`cursor-pointer rounded px-1 transition-colors duration-200 ${
+        revealed
+          ? 'bg-softspace-800/40 text-softspace-200 border border-softspace-800/60'
+          : 'bg-softspace-800 text-transparent select-none hover:bg-softspace-750 hover:text-transparent'
+      }`}
+      title="Click to reveal spoiler"
+    >
+      {children}
+    </span>
+  );
+}
+
+function parseMarkdownInline(text: string): React.ReactNode {
+  if (!text) return '';
+
+  // 1. Spoiler: ||text||
+  const spoilerRegex = /\|\|([\s\S]+?)\|\|/;
+  const spoilerMatch = text.match(spoilerRegex);
+  if (spoilerMatch && spoilerMatch.index !== undefined) {
+    const before = text.slice(0, spoilerMatch.index);
+    const matchText = spoilerMatch[1];
+    const after = text.slice(spoilerMatch.index + spoilerMatch[0].length);
+    return (
+      <>
+        {parseMarkdownInline(before)}
+        <Spoiler>{parseMarkdownInline(matchText)}</Spoiler>
+        {parseMarkdownInline(after)}
+      </>
+    );
+  }
+
+  // 2. Underline: __text__
+  const underlineRegex = /__([\s\S]+?)__/;
+  const underlineMatch = text.match(underlineRegex);
+  if (underlineMatch && underlineMatch.index !== undefined) {
+    const before = text.slice(0, underlineMatch.index);
+    const matchText = underlineMatch[1];
+    const after = text.slice(underlineMatch.index + underlineMatch[0].length);
+    return (
+      <>
+        {parseMarkdownInline(before)}
+        <span className="underline">{parseMarkdownInline(matchText)}</span>
+        {parseMarkdownInline(after)}
+      </>
+    );
+  }
+
+  // 3. Bold: **text**
+  const boldRegex = /\*\*([\s\S]+?)\*\*/;
+  const boldMatch = text.match(boldRegex);
+  if (boldMatch && boldMatch.index !== undefined) {
+    const before = text.slice(0, boldMatch.index);
+    const matchText = boldMatch[1];
+    const after = text.slice(boldMatch.index + boldMatch[0].length);
+    return (
+      <>
+        {parseMarkdownInline(before)}
+        <strong className="font-bold text-softspace-50">{parseMarkdownInline(matchText)}</strong>
+        {parseMarkdownInline(after)}
+      </>
+    );
+  }
+
+  // 4. Italic: _text_
+  const italicRegex = /_([\s\S]+?)_/;
+  const italicMatch = text.match(italicRegex);
+  if (italicMatch && italicMatch.index !== undefined) {
+    const before = text.slice(0, italicMatch.index);
+    const matchText = italicMatch[1];
+    const after = text.slice(italicMatch.index + italicMatch[0].length);
+    return (
+      <>
+        {parseMarkdownInline(before)}
+        <em className="italic">{parseMarkdownInline(matchText)}</em>
+        {parseMarkdownInline(after)}
+      </>
+    );
+  }
+
+  // 5. Strikethrough: ~~text~~
+  const strikeRegex = /~~([\s\S]+?)~~/;
+  const strikeMatch = text.match(strikeRegex);
+  if (strikeMatch && strikeMatch.index !== undefined) {
+    const before = text.slice(0, strikeMatch.index);
+    const matchText = strikeMatch[1];
+    const after = text.slice(strikeMatch.index + strikeMatch[0].length);
+    return (
+      <>
+        {parseMarkdownInline(before)}
+        <span className="line-through opacity-70">{parseMarkdownInline(matchText)}</span>
+        {parseMarkdownInline(after)}
+      </>
+    );
+  }
+
+  return text;
+}
+
+function stripMarkdown(text: string) {
+  if (!text) return '';
+  let formatted = text;
+  if (formatted.startsWith('-# ')) {
+    formatted = formatted.slice(3);
+  }
+  return formatted
+    .replace(/\*\*([\s\S]+?)\*\*/g, '$1')
+    .replace(/__([\s\S]+?)__/g, '$1')
+    .replace(/_([\s\S]+?)_/g, '$1')
+    .replace(/~~([\s\S]+?)__/g, '$1')
+    .replace(/~~([\s\S]+?)~~/g, '$1')
+    .replace(/\|\|([\s\S]+?)\|\|/g, '[Spoiler]');
 }
 
 function renderReplyPreviewContent(content: string) {
@@ -219,14 +360,14 @@ function renderReplyPreviewContent(content: string) {
 
   while ((match = CUSTOM_EMOJI_TOKEN_RE.exec(content)) !== null) {
     if (match.index > lastIndex) {
-      nodes.push(<span key={`reply-text-${lastIndex}`}>{content.slice(lastIndex, match.index)}</span>);
+      nodes.push(<span key={`reply-text-${lastIndex}`}>{stripMarkdown(content.slice(lastIndex, match.index))}</span>);
     }
     nodes.push(renderCustomEmojiInline(match[1] as 'EMOJI' | 'GIF', match[2], match[3], `reply-emoji-${match.index}`, true));
     lastIndex = match.index + match[0].length;
   }
 
   if (lastIndex < content.length) {
-    nodes.push(<span key={`reply-text-tail-${lastIndex}`}>{content.slice(lastIndex)}</span>);
+    nodes.push(<span key={`reply-text-tail-${lastIndex}`}>{stripMarkdown(content.slice(lastIndex))}</span>);
   }
 
   return nodes;
@@ -277,6 +418,14 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
   const currentActiveChannelId = isDm ? dmId : activeChannelId;
 
   const clearUnread = useChatStore(state => state.clearUnread);
+  const setActiveChannel = useChatStore(state => state.setActiveChannel);
+
+  useEffect(() => {
+    if (isDm && dmId) {
+      setActiveChannel(null, dmId);
+    }
+  }, [isDm, dmId, setActiveChannel]);
+
   useEffect(() => {
     if (currentActiveChannelId) {
       clearUnread(currentActiveChannelId);
@@ -291,9 +440,13 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
   const setCachedServerInfo = useServerStore(state => state.setCachedServerInfo);
   const setCachedMembers = useServerStore(state => state.setCachedMembers);
   const setCachedMessages = useServerStore(state => state.setCachedMessages);
+  const prependCachedMessages = useServerStore(state => state.prependCachedMessages);
 
   const [isMessagesLoading, setIsMessagesLoading] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState<Record<string, boolean>>({});
   const [newMessage, setNewMessage] = useState('');
+  const [isSketchpadOpen, setIsSketchpadOpen] = useState(false);
 
   const CALL_PANEL_HEIGHT_KEY = 'softspace:dm-call-panel-height';
   const [callPanelHeight, setCallPanelHeight] = useState(() => {
@@ -481,6 +634,7 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const lastTypingEmitRef = useRef<number>(0);
@@ -499,6 +653,9 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
     }
   }, [isVoiceChannel, currentActiveChannelId, activeCall?.channelId, activeCall?.isDm, setActiveCall]);
 
+
+
+
   // Load messages + channel/server metadata
   useEffect(() => {
     if (!token || !currentActiveChannelId || currentActiveChannelId === 'default') {
@@ -506,7 +663,7 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
     }
     const isDmActive = isDm;
 
-    if (!cachedMessages[currentActiveChannelId]) {
+    if (!useServerStore.getState().cachedMessages[currentActiveChannelId]) {
       setIsMessagesLoading(true);
     }
 
@@ -529,6 +686,8 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
       .then(data => {
         const msgs = Array.isArray(data?.messages) ? data.messages : [];
         setCachedMessages(currentActiveChannelId, msgs);
+        // If we got fewer than 50 messages, there are no more older ones
+        setHasMoreMessages(prev => ({ ...prev, [currentActiveChannelId]: msgs.length >= 50 }));
       })
       .catch(err => {
         console.error('Error fetching messages:', err);
@@ -540,7 +699,72 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
     } else {
       // Nothing needed for DMs
     }
-  }, [currentActiveChannelId, isDm, token, cachedMessages, setCachedMessages]);
+  }, [currentActiveChannelId, isDm, token, setCachedMessages]);
+
+  // Load older messages when scrolling to the top
+  const loadOlderMessages = useCallback(async () => {
+    if (!token || !currentActiveChannelId || isLoadingOlder) return;
+    if (hasMoreMessages[currentActiveChannelId] === false) return;
+
+    const currentMessages = useServerStore.getState().cachedMessages[currentActiveChannelId];
+    if (!currentMessages || currentMessages.length === 0) return;
+
+    const oldestMessage = currentMessages[0];
+    const oldestDate = oldestMessage.createdAt;
+    const isDmActive = isDm;
+
+    setIsLoadingOlder(true);
+
+    const path = isDmActive
+      ? `/api/dms/${currentActiveChannelId}/messages?limit=50&before=${encodeURIComponent(oldestDate)}`
+      : `/api/messages/channels/${currentActiveChannelId}/messages?limit=50&before=${encodeURIComponent(oldestDate)}`;
+
+    try {
+      const res = await api(path, {}, token);
+      if (!res.ok) throw new Error('Failed to fetch older messages');
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : { messages: [] };
+      const olderMsgs = Array.isArray(data?.messages) ? data.messages : [];
+
+      if (olderMsgs.length > 0) {
+        // Save scroll position before prepending
+        const container = messagesContainerRef.current;
+        const prevScrollHeight = container?.scrollHeight ?? 0;
+        const prevScrollTop = container?.scrollTop ?? 0;
+
+        prependCachedMessages(currentActiveChannelId, olderMsgs);
+
+        // Restore scroll position after React re-renders
+        requestAnimationFrame(() => {
+          if (container) {
+            const newScrollHeight = container.scrollHeight;
+            container.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+          }
+        });
+      }
+
+      setHasMoreMessages(prev => ({ ...prev, [currentActiveChannelId]: olderMsgs.length >= 50 }));
+    } catch (err) {
+      console.error('Error fetching older messages:', err);
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [token, currentActiveChannelId, isDm, isLoadingOlder, hasMoreMessages, prependCachedMessages]);
+
+  // Scroll event listener for loading older messages
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (container.scrollTop < 100 && !isLoadingOlder) {
+        loadOlderMessages();
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [loadOlderMessages, isLoadingOlder]);
 
   // Load server when serverId changes
   useEffect(() => {
@@ -1338,80 +1562,20 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
     return members.find(m => m.userId === me?.id);
   }, [members, me?.id, isDm, activeChannelId]);
   const canManageChannels = useMemo(() => {
-    if (me?.systemRole === 'CEO') return true;
-    if (!serverInfo || !me) return false;
-    if (serverInfo.ownerId === me.id) return true;
-
-    let perms = 0n;
-    const everyoneRole = serverInfo.roles?.find((r: any) => r.isDefault);
-    if (everyoneRole) perms |= BigInt(everyoneRole.permissions || '0');
-
-    for (const rid of (myMemberInfo?.roleIds ?? [])) {
-      const r = serverInfo.roles?.find((role: any) => role.id === rid);
-      if (r) perms |= BigInt(r.permissions || '0');
-    }
-    const ADMINISTRATOR = 1n << 9n;
-    const MANAGE_CHANNELS = 1n << 3n;
-    return (perms & ADMINISTRATOR) === ADMINISTRATOR || (perms & MANAGE_CHANNELS) === MANAGE_CHANNELS;
+    const perms = computeChannelPermissions(me, myMemberInfo, serverInfo, null);
+    return hasPermission(perms, Permissions.MANAGE_CHANNELS);
   }, [serverInfo, me, myMemberInfo]);
 
   const canManageServer = useMemo(() => {
-    if (me?.systemRole === 'CEO') return true;
-    if (!serverInfo || !me) return false;
-    if (serverInfo.ownerId === me.id) return true;
-
-    let perms = 0n;
-    const everyoneRole = serverInfo.roles?.find((r: any) => r.isDefault);
-    if (everyoneRole) perms |= BigInt(everyoneRole.permissions || '0');
-
-    for (const rid of (myMemberInfo?.roleIds ?? [])) {
-      const r = serverInfo.roles?.find((role: any) => role.id === rid);
-      if (r) perms |= BigInt(r.permissions || '0');
-    }
-    const ADMINISTRATOR = 1n << 9n;
-    const MANAGE_SERVER = 1n << 5n;
-    return (perms & ADMINISTRATOR) === ADMINISTRATOR || (perms & MANAGE_SERVER) === MANAGE_SERVER;
+    const perms = computeChannelPermissions(me, myMemberInfo, serverInfo, null);
+    return hasPermission(perms, Permissions.MANAGE_SERVER);
   }, [serverInfo, me, myMemberInfo]);
 
   const canSendMessages = useMemo(() => {
-    if (me?.systemRole === 'CEO') return true;
     if (isDm) return true;
-    if (!serverInfo || !me || !channelInfo) return false;
-    if (serverInfo.ownerId === me.id) return true;
     if (myMemberInfo?.timeoutUntil && new Date(myMemberInfo.timeoutUntil) > new Date()) return false;
-
-    let perms = 0n;
-    const everyoneRole = serverInfo.roles?.find((r: any) => r.isDefault);
-    if (everyoneRole) perms |= BigInt(everyoneRole.permissions || '0');
-
-    for (const rid of (myMemberInfo?.roleIds ?? [])) {
-      const r = serverInfo.roles?.find((role: any) => role.id === rid);
-      if (r) perms |= BigInt(r.permissions || '0');
-    }
-
-    const ADMINISTRATOR = 1n << 9n;
-    if ((perms & ADMINISTRATOR) === ADMINISTRATOR) return true;
-
-    const SEND_MESSAGES = 1n << 1n;
-    let finalSend = (perms & SEND_MESSAGES) === SEND_MESSAGES;
-
-    if (channelInfo.permissionOverrides) {
-      try {
-        const overrides = typeof channelInfo.permissionOverrides === 'string' ? JSON.parse(channelInfo.permissionOverrides) : channelInfo.permissionOverrides;
-        for (const ov of overrides) {
-          if (ov.roleId === everyoneRole?.id || (myMemberInfo?.roleIds ?? []).includes(ov.roleId)) {
-            const allow = BigInt(ov.allow || '0');
-            const deny = BigInt(ov.deny || '0');
-            if ((deny & SEND_MESSAGES) === SEND_MESSAGES) finalSend = false;
-            if ((allow & SEND_MESSAGES) === SEND_MESSAGES) finalSend = true;
-          }
-        }
-      } catch (e) {
-        console.error("Failed to parse permissionOverrides", e);
-      }
-    }
-
-    return finalSend;
+    const perms = computeChannelPermissions(me, myMemberInfo, serverInfo, channelInfo);
+    return hasPermission(perms, Permissions.SEND_MESSAGES);
   }, [serverInfo, me, myMemberInfo, channelInfo, isDm]);
 
   // Drag and drop file upload handlers
@@ -1495,6 +1659,7 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
             activeId={currentActiveChannelId}
             token={token}
             canManageChannels={canManageChannels}
+            myMemberInfo={myMemberInfo}
             onCreate={() => setShowCreateChannel(true)}
             onCreateInCategory={(parentId) => {
               setChannelDraftParentId(parentId);
@@ -1578,6 +1743,7 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
               activeId={currentActiveChannelId}
               token={token}
               canManageChannels={canManageChannels}
+              myMemberInfo={myMemberInfo}
               onCreate={() => setShowCreateChannel(true)}
               onCreateInCategory={(parentId) => {
                 setChannelDraftParentId(parentId);
@@ -1847,7 +2013,7 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
           </>
         )}
 
-        <div className="flex-1 overflow-y-auto px-6 pt-4 pb-2 flex flex-col relative z-10">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-6 pt-4 pb-2 flex flex-col relative z-10">
           {isMessagesLoading && messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-softspace-500">
               <div className="animate-pulse flex items-center gap-2">
@@ -1859,7 +2025,22 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
               {t('no_messages_yet')}
             </div>
           ) : (
-            messages
+            <>
+            {isLoadingOlder && (
+              <div className="flex items-center justify-center py-3">
+                <div className="animate-spin w-5 h-5 border-2 border-softspace-500 border-t-transparent rounded-full" />
+                <span className="ml-2 text-xs text-softspace-500">{t('loading_older_messages') || 'Loading older messages...'}</span>
+              </div>
+            )}
+            {hasMoreMessages[currentActiveChannelId ?? ''] !== false && !isLoadingOlder && messages.length >= 50 && (
+              <button
+                onClick={loadOlderMessages}
+                className="mx-auto my-2 px-4 py-1.5 text-xs text-softspace-400 hover:text-softspace-200 bg-softspace-800/50 hover:bg-softspace-800 rounded-full transition-colors"
+              >
+                {t('load_more_messages') || 'Load more messages'}
+              </button>
+            )}
+            {messages
               .filter(msg => {
                 if (!searchQuery) return true;
                 const q = searchQuery.toLowerCase();
@@ -1900,7 +2081,7 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
                   msg.replyToId;
 
                 const isOwn = me?.id === msg.author.id;
-                const canDelete = isOwn || me?.systemRole === 'CEO' || (!isDm && serverInfo && me?.id === serverInfo.ownerId);
+                const canDelete = isOwn || me?.systemRole === 'CEO' || me?.systemRole === 'MODERATOR' || (!isDm && serverInfo && me?.id === serverInfo.ownerId);
                 const authorMemberInfo = members.find(m => m.userId === msg.author.id);
                 const authorRoleIds = authorMemberInfo?.roleIds ?? [];
 
@@ -1945,7 +2126,8 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
                   />
                 );
               })
-          )}
+            }
+          </>)}
           <div ref={messagesEndRef} />
         </div>
 
@@ -2094,6 +2276,16 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
               ) : (
                 <Paperclip size={18} />
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSketchpadOpen(true)}
+              disabled={!canSendMessages}
+              className="text-softspace-400 hover:text-softspace-200 transition-colors shrink-0 p-2 disabled:opacity-50"
+              aria-label={t('sketchpad_title') || 'Skizzenblock'}
+              title={t('sketchpad_title') || 'Skizzenblock'}
+            >
+              <Palette size={18} />
             </button>
             <div className="relative">
               <button
@@ -2305,7 +2497,7 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
                 type="button"
                 onClick={() => {
                   const link = document.createElement('a');
-                  link.href = `${API_URL}/api/uploads/${lightboxImage.id}/download`;
+                  link.href = `${resolveApiUrl()}/api/uploads/${lightboxImage.id}/download`;
                   link.target = '_blank';
                   link.rel = 'noopener noreferrer';
                   document.body.appendChild(link);
@@ -2380,6 +2572,16 @@ export default function ChatArea({ isDm = false }: { isDm?: boolean }) {
           isMe={me?.id === selectedUser.id}
           serverId={isDm ? undefined : serverId}
           canModerate={!isDm && canManageChannels}
+        />
+      )}
+
+      {isSketchpadOpen && (
+        <SketchpadModal
+          isOpen={isSketchpadOpen}
+          onClose={() => setIsSketchpadOpen(false)}
+          onSend={(file) => {
+            void uploadFiles([file]);
+          }}
         />
       )}
     </div>
@@ -3080,9 +3282,35 @@ function MessageRow(props: {
     if (!message.content) return null;
 
     const renderMentionText = (text: string, keyPrefix: string) => {
+      const URL_RE = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+
+      const renderTextWithLinks = (plainText: string, linkKeyPrefix: string) => {
+        const linkParts = plainText.split(URL_RE);
+        return linkParts.map((segment, i) => {
+          if (URL_RE.test(segment)) {
+            URL_RE.lastIndex = 0;
+            const href = segment.startsWith('www.') ? `https://${segment}` : segment;
+            return (
+              <a
+                key={`${linkKeyPrefix}-link-${i}`}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 underline break-all"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {segment}
+              </a>
+            );
+          }
+          URL_RE.lastIndex = 0;
+          return segment ? <span key={`${linkKeyPrefix}-t-${i}`}>{parseMarkdownInline(segment)}</span> : null;
+        });
+      };
+
       const parts = text.split(/(@\w+)/g);
       return parts.map((part, index) => {
-        if (!part.startsWith('@')) return <span key={`${keyPrefix}-text-${index}`}>{part}</span>;
+        if (!part.startsWith('@')) return <span key={`${keyPrefix}-text-${index}`}>{renderTextWithLinks(part, `${keyPrefix}-${index}`)}</span>;
 
         const mentionName = part.substring(1).toLowerCase();
         const role = serverRoles?.find(r => r.name.toLowerCase() === mentionName || (r.isDefault && mentionName === 'everyone'));
@@ -3128,28 +3356,47 @@ function MessageRow(props: {
       });
     };
 
+    const trimmed = message.content.trim();
+    const isSubtext = trimmed.startsWith('-# ');
+    const contentToParse = isSubtext ? message.content.replace(/^-#\s*/, '') : message.content;
+
+    const parsedTrimmed = contentToParse.trim();
+    const noWhitespace = parsedTrimmed.replace(/\s+/g, '');
+    const tokensOnly = noWhitespace.replace(/\[\[ce:(?:EMOJI|GIF):[^:\]]+:[^\]]+\]\]/g, '');
+    const isOnlyEmojis = parsedTrimmed.length > 0 && tokensOnly === '';
+
     const nodes = [];
     let lastIndex = 0;
     let match;
     CUSTOM_EMOJI_TOKEN_RE.lastIndex = 0;
 
-    while ((match = CUSTOM_EMOJI_TOKEN_RE.exec(message.content)) !== null) {
+    while ((match = CUSTOM_EMOJI_TOKEN_RE.exec(contentToParse)) !== null) {
       if (match.index > lastIndex) {
-        nodes.push(...renderMentionText(message.content.slice(lastIndex, match.index), `segment-${lastIndex}`));
+        nodes.push(...renderMentionText(contentToParse.slice(lastIndex, match.index), `segment-${lastIndex}`));
       }
       nodes.push(
         renderCustomEmojiInline(
           match[1] as 'EMOJI' | 'GIF',
           match[2],
           match[3],
-          `emoji-${match.index}`
+          `emoji-${match.index}`,
+          false,
+          isOnlyEmojis
         )
       );
       lastIndex = match.index + match[0].length;
     }
 
-    if (lastIndex < message.content.length) {
-      nodes.push(...renderMentionText(message.content.slice(lastIndex), `tail-${lastIndex}`));
+    if (lastIndex < contentToParse.length) {
+      nodes.push(...renderMentionText(contentToParse.slice(lastIndex), `tail-${lastIndex}`));
+    }
+
+    if (isSubtext) {
+      return (
+        <span className="text-xs font-light text-softspace-400 opacity-90 leading-relaxed">
+          {nodes}
+        </span>
+      );
     }
 
     return nodes;
@@ -3207,7 +3454,7 @@ function MessageRow(props: {
               {message.replyTo.author?.displayName || message.replyTo.author?.username}
             </span>
             <div className="flex items-center gap-1 shrink-0">
-              <UserBadges badges={message.replyTo.author?.badges} variant="compact" />
+              <UserBadges badges={message.replyTo.author?.badges} variant="full" />
             </div>
             <span className="truncate text-softspace-500">{renderReplyPreviewContent(message.replyTo.content)}</span>
           </div>
@@ -3235,13 +3482,14 @@ function MessageRow(props: {
               {message.author.displayName || message.author.username}
             </button>
             <div className="flex items-center gap-1 shrink-0">
-              <UserBadges badges={message.author.badges} variant="compact" />
+              <UserBadges badges={message.author.badges} variant="full" />
             </div>
             {message.author.systemRole === 'CEO' && (
               <span className="text-[10px] bg-orange-500 text-white px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
                 CEO
               </span>
             )}
+
             {message.author.pronouns && (
               <span className="text-[10px] bg-softspace-800 text-softspace-300 px-1.5 py-0.5 rounded font-normal shrink-0">
                 {message.author.pronouns}
@@ -3481,7 +3729,7 @@ function AttachmentView({
       type="button"
       onClick={() => {
         const link = document.createElement('a');
-        link.href = `${API_URL}/api/uploads/${attachment.id}/download`;
+        link.href = `${resolveApiUrl()}/api/uploads/${attachment.id}/download`;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
         document.body.appendChild(link);

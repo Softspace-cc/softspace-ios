@@ -1,4 +1,6 @@
-import { app, BrowserWindow, ipcMain, shell, Notification, nativeImage, desktopCapturer, session } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, Notification, nativeImage, desktopCapturer, session, Tray, Menu } from 'electron';
+import pkg from 'electron-updater';
+const { autoUpdater } = pkg;
 import { execFile } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -10,6 +12,15 @@ const APP_USER_MODEL_ID = 'com.softspace.app';
 if (process.platform === 'win32') {
   app.setAppUserModelId(app.isPackaged ? APP_USER_MODEL_ID : process.execPath);
 }
+
+// Configure autoUpdater
+autoUpdater.setFeedURL({
+  provider: 'generic',
+  url: 'https://softspace.cc/api/releases/windows'
+});
+
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
 
 let activeWin = null;
 const execFileAsync = promisify(execFile);
@@ -24,6 +35,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow;
+let tray = null;
+let minimizeToTrayEnabled = false;
 let mediaSessionsCache = [];
 let stopMediaSessionsWatcher = null;
 
@@ -170,9 +183,10 @@ $items | ConvertTo-Json -Depth 5 -Compress
 `.trim();
 
   try {
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
     const { stdout } = await execFileAsync(
       'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
       {
         windowsHide: true,
         timeout: 5000,
@@ -208,9 +222,10 @@ Get-Process | ForEach-Object {
 `.trim();
 
   try {
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
     const { stdout } = await execFileAsync(
       'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
       {
         windowsHide: true,
         timeout: 8000,
@@ -224,12 +239,75 @@ Get-Process | ForEach-Object {
     const parsed = JSON.parse(trimmed);
     const items = Array.isArray(parsed) ? parsed : [parsed];
     return items.map((item) => ({
-      name: String(item.name ?? ''),
-      title: String(item.title ?? ''),
+      name: String(item.ProcessName ?? item.name ?? ''),
+      title: String(item.MainWindowTitle ?? item.title ?? ''),
     }));
   } catch (error) {
     console.error('Error getting running processes:', error);
     return [];
+  }
+}
+
+function getTrayIcon() {
+  const icoPath = path.join(__dirname, '../build/icon.ico');
+  if (fs.existsSync(icoPath)) {
+    return nativeImage.createFromPath(icoPath).resize({ width: 16, height: 16 });
+  }
+  const pngPath = path.join(__dirname, '../build/icon.png');
+  if (fs.existsSync(pngPath)) {
+    return nativeImage.createFromPath(pngPath).resize({ width: 16, height: 16 });
+  }
+  return nativeImage.createEmpty();
+}
+
+function createTray() {
+  if (tray) return;
+
+  tray = new Tray(getTrayIcon());
+  tray.setToolTip('SoftSpace');
+
+  updateTrayMenu();
+
+  tray.on('double-click', () => {
+    showMainWindow();
+  });
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'SoftSpace öffnen',
+      click: () => showMainWindow(),
+    },
+    { type: 'separator' },
+    {
+      label: 'Beenden',
+      click: () => {
+        minimizeToTrayEnabled = false;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+}
+
+function showMainWindow() {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  if (process.platform === 'win32') {
+    mainWindow.flashFrame(false);
+  }
+}
+
+function destroyTray() {
+  if (tray) {
+    tray.destroy();
+    tray = null;
   }
 }
 
@@ -261,6 +339,14 @@ function createWindow() {
     shell.openExternal(details.url);
     return { action: 'deny' };
   });
+
+  // Intercept the close event for system tray minimize
+  mainWindow.on('close', (event) => {
+    if (minimizeToTrayEnabled) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
 }
 
 app.whenReady().then(() => {
@@ -281,6 +367,7 @@ app.whenReady().then(() => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    showMainWindow();
   });
 });
 
@@ -289,7 +376,17 @@ app.on('window-all-closed', () => {
     stopMediaSessionsWatcher();
     stopMediaSessionsWatcher = null;
   }
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') {
+    // If we have tray hiding enabled, don't quit — the window is already hidden
+    if (!minimizeToTrayEnabled) {
+      destroyTray();
+      app.quit();
+    }
+  }
+});
+
+app.on('before-quit', () => {
+  destroyTray();
 });
 
 // IPC handlers for window controls
@@ -309,6 +406,17 @@ ipcMain.on('window-max', () => {
 
 ipcMain.on('window-close', () => {
   if (mainWindow) mainWindow.close();
+});
+
+// IPC handler for minimize-to-tray preference changes
+ipcMain.on('set-minimize-to-tray', (_event, enabled) => {
+  minimizeToTrayEnabled = enabled;
+
+  if (enabled) {
+    createTray();
+  } else {
+    destroyTray();
+  }
 });
 
 // Active window tracking (Game presence)
@@ -392,14 +500,7 @@ ipcMain.on('show-notification', async (_event, payload = {}) => {
 
     notification.on('click', () => {
       if (!mainWindow) return;
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore();
-      }
-      mainWindow.show();
-      mainWindow.focus();
-      if (process.platform === 'win32') {
-        mainWindow.flashFrame(false);
-      }
+      showMainWindow();
       mainWindow.webContents.send('notification-clicked', navigationTarget ?? null);
     });
 
@@ -417,4 +518,72 @@ ipcMain.on('show-notification', async (_event, payload = {}) => {
   }
 });
 
-// (custom notification handler removed - reverted to original behavior)
+// Auto-updater event handlers
+autoUpdater.on('checking-for-update', () => {
+  if (mainWindow) {
+    mainWindow.webContents.send('update-status', { status: 'checking' });
+  }
+});
+
+autoUpdater.on('update-available', (info) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('update-status', { status: 'available', info });
+  }
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('update-status', { status: 'not-available', info });
+  }
+});
+
+autoUpdater.on('download-progress', (progress) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('update-download-progress', progress);
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('update-status', { status: 'downloaded', info });
+  }
+});
+
+autoUpdater.on('error', (error) => {
+  console.error('Auto-updater error:', error);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-status', { status: 'error', error: error.message });
+  }
+});
+
+// IPC handlers for updates
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    await autoUpdater.checkForUpdates();
+    return { success: true };
+  } catch (error) {
+    console.error('Check for updates failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('download-update', async () => {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (error) {
+    console.error('Download update failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('install-update', async () => {
+  try {
+    autoUpdater.quitAndInstall();
+    return { success: true };
+  } catch (error) {
+    console.error('Install update failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+

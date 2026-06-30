@@ -100,10 +100,58 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/:id/download', async (req, res, next) => {
+router.get('/:id/download', requireAuth, async (req, res, next) => {
   try {
-    const att = await prisma.attachment.findUnique({ where: { id: req.params.id } });
+    const att = await prisma.attachment.findUnique({
+      where: { id: req.params.id },
+      include: {
+        message: {
+          include: {
+            channel: {
+              include: {
+                server: {
+                  include: { roles: true }
+                }
+              }
+            }
+          }
+        },
+        dmMessage: {
+          include: {
+            dmChannel: {
+              include: {
+                members: true
+              }
+            }
+          }
+        }
+      }
+    });
     if (!att) throw httpError(404, 'not_found');
+
+    // Access control check:
+    if (att.messageId && att.message?.channel) {
+      const channel = att.message.channel;
+      const serverId = channel.serverId;
+      const member = await prisma.serverMember.findUnique({
+        where: { userId_serverId: { userId: req.user.id, serverId } },
+        include: { roles: { include: { role: true } } },
+      });
+      if (!member) {
+        throw httpError(403, 'not_server_member', 'You are not a member of this server.');
+      }
+      const perms = channelPermissions(member, channel.server, channel);
+      if (!hasPermission(perms, Permissions.VIEW_CHANNELS)) {
+        throw httpError(403, 'missing_permission', 'You do not have permission to view this channel.');
+      }
+    } else if (att.dmMessageId && att.dmMessage?.dmChannel) {
+      const dmChannel = att.dmMessage.dmChannel;
+      const isMember = dmChannel.members.some(m => m.userId === req.user.id);
+      if (!isMember) {
+        throw httpError(403, 'not_dm_member', 'You are not a member of this DM.');
+      }
+    }
+
     const filePath = path.join(UPLOAD_DIR, path.basename(att.url));
     res.download(filePath, att.filename);
   } catch (err) {

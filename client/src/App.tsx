@@ -31,6 +31,8 @@ import SupportAdminPage from './pages/SupportAdminPage';
 import AboutPage from './pages/AboutPage';
 import DiscordCallbackPage from './pages/DiscordCallbackPage';
 import BadgeAdminPage from './pages/BadgeAdminPage';
+import UserRoleAdminPage from './pages/UserRoleAdminPage';
+import TrainModsPage from './pages/TrainModsPage';
 import AppsGamesAdminPage from './pages/AppsGamesAdminPage';
 import QRConfirmPage from './pages/QRConfirmPage';
 import BlogPage from './pages/BlogPage';
@@ -38,20 +40,60 @@ import BlogAdminPage from './pages/BlogAdminPage';
 import EmailChangeAdminPage from './pages/EmailChangeAdminPage';
 import { CallRingModal } from './components/CallRingModal';
 import { GlobalContextMenu } from './components/GlobalContextMenu';
+import { UpdateManager } from './components/UpdateManager';
 import { isDesktopApp, isCapacitorApp } from './lib/platform';
 
 import { useServerStore } from './store/useServerStore';
+import { useBackendStore } from './store/useBackendStore';
+
+function FailoverBanner() {
+  const { mode, message } = useBackendStore();
+
+  if (!message && mode === 'primary') return null;
+
+  let bgClass = 'bg-softspace-800/95 border-b border-softspace-700/30 text-softspace-50 backdrop-blur';
+  let text = message;
+
+  if (mode === 'backup1') {
+    bgClass = 'bg-amber-950/95 border-b border-amber-900/30 text-amber-200 backdrop-blur';
+    if (!text) text = 'Verbindung zum Hauptserver unterbrochen. Backup-Server 1 ist aktiv.';
+  } else if (mode === 'backup2') {
+    bgClass = 'bg-amber-950/95 border-b border-amber-900/40 text-amber-300 backdrop-blur';
+    if (!text) text = 'Verbindung zum Hauptserver unterbrochen. Backup-Server 2 ist aktiv.';
+  } else if (mode === 'offline') {
+    bgClass = 'bg-rose-950/95 border-b border-rose-900/30 text-rose-200 backdrop-blur';
+    if (!text) text = 'Keine Verbindung zum Server möglich. Bitte Internetverbindung prüfen.';
+  }
+
+  return (
+    <div className={`${bgClass} px-4 py-2.5 text-center text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 z-[9999] transition-all duration-300 relative shadow-md shrink-0`}>
+      <span className="flex h-2 w-2 relative">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-current"></span>
+      </span>
+      <span>{text}</span>
+      {mode !== 'primary' && mode !== 'offline' && (
+        <button
+          onClick={() => useBackendStore.getState().resetToPrimary()}
+          className="ml-3 px-2 py-0.5 bg-softspace-600 hover:bg-softspace-700 text-white rounded text-xs font-semibold transition-colors cursor-pointer"
+        >
+          Hauptserver verbinden
+        </button>
+      )}
+    </div>
+  );
+}
 
 // ...
 function AppLayout() {
   const { mobileSidebarOpen, setMobileSidebarOpen } = useLayoutStore();
-  
+
   return (
     <div className="flex h-full w-full bg-softspace-950 text-softspace-50 overflow-hidden relative">
       {/* Mobile overlay for main sidebar */}
       {mobileSidebarOpen && (
-        <div 
-          className="md:hidden fixed inset-0 bg-black/50 z-40" 
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-40"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}
@@ -69,6 +111,7 @@ function AppLayout() {
       <GlobalPresenceManager />
       <CallRingModal />
       <GlobalContextMenu />
+      <UpdateManager />
     </div>
   );
 }
@@ -87,6 +130,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const socket = useChatStore(state => state.socket);
   const navigate = useNavigate();
 
+  // Apply blue-orange theme for brokenskies user
+  useEffect(() => {
+    const isBrokenSkies = user && (
+      user.username?.toLowerCase() === 'brokenskies' ||
+      user.displayName?.toLowerCase() === 'brokenskies'
+    );
+    if (isBrokenSkies) {
+      document.body.classList.add('theme-blue-orange');
+    } else {
+      document.body.classList.remove('theme-blue-orange');
+    }
+    return () => {
+      document.body.classList.remove('theme-blue-orange');
+    };
+  }, [user]);
+
   // Auto-away after 5 minutes of inactivity
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isIdleRef = useRef(false);
@@ -100,14 +159,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
         socket.disconnect();
       }
     };
-    
+
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [socket]);
 
   useEffect(() => {
     if (!token || !user || !socket) return;
-    
+
     // Set initial status to server to ensure we are marked online, unless we want to be DND/invisible
     if (!user.status || user.status === 'offline') {
       socket.emit('presence:set', { status: 'online', customStatus: user.customStatus });
@@ -224,9 +283,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
         console.error('Failed to fetch friends', err);
       }
     };
-    
+
     refreshFriends();
-      
+
     // Load DMs to ensure calling from profiles works
     const refreshDms = async () => {
       try {
@@ -241,7 +300,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
         console.error('Failed to fetch DMs', err);
       }
     };
-    
+
     refreshDms();
 
     // Fetch servers here as well to make sure global state is populated on fresh load
@@ -287,6 +346,20 @@ import { GlobalPresenceManager } from './components/GlobalPresenceManager';
 
 
 export default function App() {
+  const unreads = useChatStore(state => state.unreads);
+  const initializeBackend = useBackendStore(state => state.initialize);
+
+  useEffect(() => {
+    initializeBackend();
+  }, [initializeBackend]);
+
+  useEffect(() => {
+    if (window.electron?.setBadgeCount) {
+      const totalUnread = Object.values(unreads).reduce((sum, count) => sum + count, 0);
+      window.electron.setBadgeCount(totalUnread);
+    }
+  }, [unreads]);
+
   useEffect(() => {
     const preventDefault = (e: DragEvent) => {
       e.preventDefault();
@@ -342,6 +415,8 @@ export default function App() {
           <Route path="admin/dashboard/appsandgames" element={<AppsGamesAdminPage />} />
           <Route path="bage/admin" element={<BadgeAdminPage />} />
           <Route path="bages/admin" element={<BadgeAdminPage />} />
+          <Route path="userrole" element={<UserRoleAdminPage />} />
+          <Route path="trainmods" element={<TrainModsPage />} />
           <Route
             path="servers/:serverId/settings"
             element={<ServerSettingsPage />}
@@ -357,6 +432,7 @@ export default function App() {
     return (
       <div className="flex flex-col h-screen w-screen overflow-hidden">
         <TitleBar />
+        <FailoverBanner />
         <div className="flex-1 overflow-hidden relative">
           {content}
         </div>
@@ -364,5 +440,12 @@ export default function App() {
     );
   }
 
-  return content;
+  return (
+    <div className="flex flex-col h-screen w-screen overflow-hidden">
+      <FailoverBanner />
+      <div className="flex-1 overflow-hidden relative">
+        {content}
+      </div>
+    </div>
+  );
 }

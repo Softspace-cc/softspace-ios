@@ -70,6 +70,9 @@ jobs:
             target.add_resources([file_ref1, file_ref2])
             project.save
           "
+          cd "ios app/ios/App"
+          ruby configure-watchos.rb
+
 
       # 3. Generate Assets (Icon/Splash)
       - name: Generate Mobile Assets

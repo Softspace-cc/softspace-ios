@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Heart } from 'lucide-react';
-import { api, SOCKET_URL } from '../lib/api';
+import { api, resolveSocketUrl } from '../lib/api';
 import TelegramLoginWidget from '../components/TelegramLoginWidget';
 import { QRCodeSVG } from 'qrcode.react';
 import { io } from 'socket.io-client';
@@ -57,9 +57,9 @@ export default function AuthPage() {
       
     // Set up socket for QR login
     // #region debug-point A:qr-socket-init
-    fetch(debugUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: debugSessionId, runId: 'pre-fix', hypothesisId: 'A', location: 'AuthPage.tsx:qr-init', msg: '[DEBUG] creating qr socket', data: { socketUrl: SOCKET_URL, isElectron, href: window.location.href }, ts: Date.now() }) }).catch(() => {});
+    fetch(debugUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: debugSessionId, runId: 'pre-fix', hypothesisId: 'A', location: 'AuthPage.tsx:qr-init', msg: '[DEBUG] creating qr socket', data: { socketUrl: resolveSocketUrl(), isElectron, href: window.location.href }, ts: Date.now() }) }).catch(() => {});
     // #endregion
-    const socket = io(SOCKET_URL, {
+    const socket = io(resolveSocketUrl(), {
       auth: { qrLogin: true },
       query: { qrLogin: 'true' },
       transports: ['websocket', 'polling'],

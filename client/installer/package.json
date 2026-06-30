@@ -3,7 +3,7 @@
   "description": "SoftSpace desktop installer",
   "author": "Jamie",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.7",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -33,7 +33,9 @@
       "requestExecutionLevel": "user"
     },
     "win": {
-      "target": ["portable"],
+      "target": [
+        "portable"
+      ],
       "icon": "../build/icon.ico",
       "signExecutable": false
     }

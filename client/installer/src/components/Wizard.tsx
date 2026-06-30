@@ -66,10 +66,11 @@ function formatBytes(bytes: number) {
   return `${Math.max(1, Math.ceil(bytes / 1024))} KB`;
 }
 
-type InstallStep = 'welcome' | 'location' | 'progress' | 'done';
+type InstallStep = 'language' | 'welcome' | 'location' | 'progress' | 'done';
 
 export function InstallWizard({
   step,
+  language,
   installDir,
   desktopShortcut,
   startMenuShortcut,
@@ -88,10 +89,12 @@ export function InstallWizard({
   onBrowse,
   onDesktopShortcutChange,
   onStartMenuShortcutChange,
+  onLanguageChange,
   onLaunch,
   onClose,
 }: {
   step: InstallStep;
+  language: 'en' | 'de';
   installDir: string;
   desktopShortcut: boolean;
   startMenuShortcut: boolean;
@@ -110,6 +113,7 @@ export function InstallWizard({
   onBrowse: () => void;
   onDesktopShortcutChange: (value: boolean) => void;
   onStartMenuShortcutChange: (value: boolean) => void;
+  onLanguageChange: (language: 'en' | 'de') => void;
   onLaunch: () => void;
   onClose: () => void;
 }) {
@@ -121,10 +125,11 @@ export function InstallWizard({
   const pct = downloadPct ?? (progressTotal > 0 ? Math.round((progressDone / progressTotal) * 100) : 0);
 
   const subtitles: Record<InstallStep, string> = {
-    welcome: 'Setup',
-    location: 'Installationsordner',
-    progress: isDownload ? 'Wird heruntergeladen…' : 'Installiert…',
-    done: 'Fertig',
+    language: language === 'de' ? 'Sprache' : 'Language',
+    welcome: language === 'de' ? 'Setup' : 'Setup',
+    location: language === 'de' ? 'Installationsordner' : 'Installation Folder',
+    progress: isDownload ? (language === 'de' ? 'Wird heruntergeladen…' : 'Downloading…') : (language === 'de' ? 'Installiert…' : 'Installing…'),
+    done: language === 'de' ? 'Fertig' : 'Complete',
   };
 
   return (
@@ -135,25 +140,30 @@ export function InstallWizard({
           <div>
             {step === 'location' && (
               <button type="button" onClick={onBack} className={btnGhost()}>
-                Zurück
+                {language === 'de' ? 'Zurück' : 'Back'}
               </button>
             )}
           </div>
           <div className="flex gap-2">
+            {step === 'language' && (
+              <button type="button" onClick={onNext} className={btnPrimary()}>
+                {language === 'de' ? 'Weiter' : 'Next'}
+              </button>
+            )}
             {step === 'welcome' && (
               <>
                 <button type="button" onClick={onClose} className={btnGhost()}>
-                  Abbrechen
+                  {language === 'de' ? 'Abbrechen' : 'Cancel'}
                 </button>
                 <button type="button" onClick={onNext} className={btnPrimary()}>
-                  Weiter
+                  {language === 'de' ? 'Weiter' : 'Next'}
                 </button>
               </>
             )}
             {step === 'location' && (
               <>
                 <button type="button" onClick={onClose} className={btnGhost()}>
-                  Abbrechen
+                  {language === 'de' ? 'Abbrechen' : 'Cancel'}
                 </button>
                 <button
                   type="button"
@@ -161,17 +171,17 @@ export function InstallWizard({
                   disabled={!installDir.trim()}
                   className={btnPrimary()}
                 >
-                  Installieren
+                  {language === 'de' ? 'Installieren' : 'Install'}
                 </button>
               </>
             )}
             {step === 'done' && (
               <>
                 <button type="button" onClick={onClose} className={btnGhost()}>
-                  Schließen
+                  {language === 'de' ? 'Schließen' : 'Close'}
                 </button>
                 <button type="button" onClick={onLaunch} className={btnPrimary()}>
-                  Öffnen
+                  {language === 'de' ? 'Öffnen' : 'Open'}
                 </button>
               </>
             )}
@@ -179,17 +189,51 @@ export function InstallWizard({
         </>
       }
     >
+      {step === 'language' && (
+        <div className="space-y-4 text-center">
+          <p className="text-sm text-softspace-300 leading-relaxed">
+            {language === 'de' ? 'Wähle deine Sprache' : 'Select your language'}
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button
+              type="button"
+              onClick={() => onLanguageChange('en')}
+              className={`px-6 py-3 rounded-lg border-2 transition-all ${
+                language === 'en'
+                  ? 'border-softspace-600 bg-softspace-600/20 text-softspace-100'
+                  : 'border-softspace-800 text-softspace-400 hover:border-softspace-700 hover:text-softspace-300'
+              }`}
+            >
+              English
+            </button>
+            <button
+              type="button"
+              onClick={() => onLanguageChange('de')}
+              className={`px-6 py-3 rounded-lg border-2 transition-all ${
+                language === 'de'
+                  ? 'border-softspace-600 bg-softspace-600/20 text-softspace-100'
+                  : 'border-softspace-800 text-softspace-400 hover:border-softspace-700 hover:text-softspace-300'
+              }`}
+            >
+              Deutsch
+            </button>
+          </div>
+        </div>
+      )}
+
       {step === 'welcome' && (
         <div className="space-y-3 text-center">
           <p className="text-sm text-softspace-300 leading-relaxed">
-            SoftSpace wird auf deinem PC installiert.
+            {language === 'de' ? 'SoftSpace wird auf deinem PC installiert.' : 'SoftSpace will be installed on your PC.'}
           </p>
           {requiresInternet && (
             <p className="text-xs text-softspace-500 leading-relaxed">
-              Die App wird beim Installieren aus dem Internet geladen. Eine aktive Verbindung ist nötig.
+              {language === 'de' 
+                ? 'Die App wird beim Installieren aus dem Internet geladen. Eine aktive Verbindung ist nötig.'
+                : 'The app will be downloaded from the internet during installation. An active connection is required.'}
             </p>
           )}
-          <p className="text-softspace-500 text-xs">Version {releaseVersion}</p>
+          <p className="text-softspace-500 text-xs">{language === 'de' ? 'Version' : 'Version'} {releaseVersion}</p>
         </div>
       )}
 
@@ -197,7 +241,7 @@ export function InstallWizard({
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-softspace-200 mb-1.5 uppercase tracking-wider">
-              Ordner
+              {language === 'de' ? 'Ordner' : 'Folder'}
             </label>
             <div className="flex gap-2">
               <input
@@ -206,7 +250,7 @@ export function InstallWizard({
                 className="flex-1 min-w-0 bg-softspace-950 border border-softspace-800 rounded-lg px-3 py-2.5 text-sm text-softspace-100 focus:outline-none focus:border-softspace-500"
               />
               <button type="button" onClick={onBrowse} className={btnGhost('shrink-0 border border-softspace-800 px-3')}>
-                Ordner
+                {language === 'de' ? 'Ordner' : 'Browse'}
               </button>
             </div>
           </div>
@@ -218,7 +262,9 @@ export function InstallWizard({
               onChange={(e) => onDesktopShortcutChange(e.target.checked)}
               className="rounded border-softspace-700 bg-softspace-950 text-softspace-600"
             />
-            <span className="text-sm text-softspace-300">Verknüpfung auf dem Desktop</span>
+            <span className="text-sm text-softspace-300">
+              {language === 'de' ? 'Verknüpfung auf dem Desktop' : 'Desktop shortcut'}
+            </span>
           </label>
 
           <label className="flex items-center gap-2.5 cursor-pointer">
@@ -228,7 +274,9 @@ export function InstallWizard({
               onChange={(e) => onStartMenuShortcutChange(e.target.checked)}
               className="rounded border-softspace-700 bg-softspace-950 text-softspace-600"
             />
-            <span className="text-sm text-softspace-300">Eintrag im Startmenü</span>
+            <span className="text-sm text-softspace-300">
+              {language === 'de' ? 'Eintrag im Startmenü' : 'Start menu entry'}
+            </span>
           </label>
         </div>
       )}
@@ -250,7 +298,7 @@ export function InstallWizard({
 
       {step === 'done' && (
         <p className="text-sm text-softspace-300 text-center leading-relaxed">
-          Installation abgeschlossen.
+          {language === 'de' ? 'Installation abgeschlossen.' : 'Installation complete.'}
         </p>
       )}
 

@@ -24,7 +24,11 @@ export function getUserPresenceSummary(user: {
   if (summary) return summary;
 
   const legacy = parseRichPresence(user.customStatus);
-  if (typeof legacy === 'string') return legacy.trim() || null;
+  if (typeof legacy === 'string') {
+    const raw = legacy.trim() || null;
+    if (!raw) return null;
+    return raw.replace(/\[\[ce:(?:EMOJI|GIF):([^:\]]+):[^\]]+\]\]/g, ':$1:');
+  }
   if (legacy) return formatPresenceLine(legacy);
   return null;
 }

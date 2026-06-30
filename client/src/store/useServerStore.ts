@@ -32,6 +32,7 @@ interface ServerState {
   setCachedServerInfo: (serverId: string, info: any) => void;
   setCachedMembers: (serverId: string, members: any[]) => void;
   setCachedMessages: (channelId: string, messages: any[]) => void;
+  prependCachedMessages: (channelId: string, olderMessages: any[]) => void;
   setCachedDms: (dms: any[]) => void;
   setCachedFriends: (friends: any[]) => void;
   clear: () => void;
@@ -72,6 +73,14 @@ export const useServerStore = create<ServerState>((set) => ({
   setCachedMessages: (channelId, messages) => set((state) => ({
     cachedMessages: { ...state.cachedMessages, [channelId]: messages }
   })),
+  prependCachedMessages: (channelId, olderMessages) => set((state) => {
+    const existing = state.cachedMessages[channelId] ?? [];
+    const existingIds = new Set(existing.map((m: any) => m.id));
+    const unique = olderMessages.filter((m: any) => !existingIds.has(m.id));
+    return {
+      cachedMessages: { ...state.cachedMessages, [channelId]: [...unique, ...existing] }
+    };
+  }),
   setCachedDms: (dms) => set({ cachedDms: dms }),
   setCachedFriends: (friends) => set({ cachedFriends: friends }),
 }));

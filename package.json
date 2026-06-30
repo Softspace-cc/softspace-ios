@@ -20,7 +20,9 @@
     "db:migrate": "npm --prefix server run db:migrate",
     "db:migrate:dev": "npm --prefix server run db:migrate:dev",
     "db:generate": "npm --prefix server run db:generate",
-    "db:seed": "npm --prefix server run db:seed"
+    "db:seed": "npm --prefix server run db:seed",
+    "deploy": "node deploy_via_node.js",
+    "deploy:fast": "node deploy_fast.js"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

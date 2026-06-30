@@ -390,6 +390,30 @@ router.post('/badge-admin/users', requireAuth, async (req, res, next) => {
   }
 });
 
+router.patch('/role-admin/:id/role', requireAuth, async (req, res, next) => {
+  try {
+    const { adminPassword, role } = req.body;
+    const ADMIN_PASSWORD = 'J4m!e2025#Go';
+
+    if (req.user.systemRole !== 'CEO' && adminPassword !== ADMIN_PASSWORD) {
+      throw httpError(403, 'forbidden');
+    }
+
+    if (!['USER', 'MODERATOR', 'CEO'].includes(role)) {
+      throw httpError(400, 'invalid_role');
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { systemRole: role }
+    });
+
+    res.json({ user: privateUser(updated) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.patch('/badge-admin/:id/badges', requireAuth, async (req, res, next) => {
   try {
     requireBadgeAdmin(req);
@@ -428,13 +452,19 @@ router.put('/badge-admin/presence-apps', requireAuth, async (req, res, next) => 
 
 router.post('/:id/platform-ban', requireAuth, async (req, res, next) => {
   try {
-    if (req.user.systemRole !== 'CEO') throw httpError(403, 'forbidden');
+    if (req.user.systemRole !== 'CEO' && req.user.systemRole !== 'MODERATOR') throw httpError(403, 'forbidden');
     if (req.user.id === req.params.id) throw httpError(400, 'cannot_ban_self');
 
     const parsed = platformBanSchema.parse(req.body ?? {});
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!target) throw httpError(404, 'user_not_found');
-    if (target.systemRole === 'CEO') throw httpError(403, 'cannot_ban_ceo');
+    if (target.systemRole === 'CEO' || target.systemRole === 'MODERATOR') throw httpError(403, 'cannot_ban_staff');
+
+    if (req.user.systemRole === 'MODERATOR') {
+      if (!parsed.durationMinutes || parsed.durationMinutes > 1440) {
+        throw httpError(403, 'moderators_can_only_ban_up_to_24h', 'Moderators can only ban for up to 24 hours.');
+      }
+    }
 
     const expiresAt = parsed.durationMinutes
       ? new Date(Date.now() + parsed.durationMinutes * 60 * 1000)
@@ -488,7 +518,7 @@ router.post('/:id/platform-ban', requireAuth, async (req, res, next) => {
 
 router.delete('/:id/platform-ban', requireAuth, async (req, res, next) => {
   try {
-    if (req.user.systemRole !== 'CEO') throw httpError(403, 'forbidden');
+    if (req.user.systemRole !== 'CEO' && req.user.systemRole !== 'MODERATOR') throw httpError(403, 'forbidden');
 
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!target) throw httpError(404, 'user_not_found');

@@ -4,28 +4,28 @@
     "api": {
       "status": "operational",
       "message": "API antwortet",
-      "checkedAt": "2026-06-24T20:56:49.816Z"
+      "checkedAt": "2026-06-26T23:33:24.071Z"
     },
     "database": {
       "status": "operational",
       "message": "PostgreSQL erreichbar",
-      "checkedAt": "2026-06-24T20:56:49.872Z"
+      "checkedAt": "2026-06-26T23:33:24.131Z"
     },
     "web": {
       "status": "operational",
       "message": "Web-App antwortet",
-      "checkedAt": "2026-06-24T20:56:49.874Z"
+      "checkedAt": "2026-06-26T23:33:24.132Z"
     },
     "realtime": {
       "status": "operational",
       "message": "WebSocket-Server aktiv",
-      "checkedAt": "2026-06-24T20:56:49.877Z"
+      "checkedAt": "2026-06-26T23:33:24.135Z"
     },
     "uploads": {
       "status": "operational",
       "message": "Upload-Speicher verfügbar",
-      "checkedAt": "2026-06-24T20:56:49.876Z"
+      "checkedAt": "2026-06-26T23:33:24.133Z"
     }
   },
-  "updatedAt": "2026-06-24T20:56:49.877Z"
+  "updatedAt": "2026-06-26T23:33:24.135Z"
 }

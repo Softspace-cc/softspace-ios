@@ -1,6 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, ArrowLeft, Code, Crown, Terminal } from 'lucide-react';
+import { Heart, ArrowLeft, Code, Crown, Shield, User as UserIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useAuthStore } from '../store/useAuthStore';
+import { api, assetUrl } from '../lib/api';
 
 export default function AboutPage() {
   const { t } = useTranslation();
@@ -72,16 +75,25 @@ export default function AboutPage() {
               </div>
             </div>
 
-            {/* Empty Desk Card */}
-            <div className="bg-[#111116] border border-softspace-800 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center min-h-[200px]">
-              <div className="w-12 h-12 rounded-full bg-softspace-900 flex items-center justify-center mb-4">
-                <span className="text-softspace-500 font-bold">?</span>
-              </div>
-              <h3 className="text-lg font-bold text-softspace-400 m-0">That's it!</h3>
-              <p className="text-softspace-500 text-sm m-0 mt-2">
-                No bloated management structure.
-              </p>
-            </div>
+            {/* Broken Skies Card */}
+            <TeamMemberCard
+              username="brokenskies"
+              defaultName="Broken Skies"
+              role="Moderator"
+              icon={<Shield size={14} />}
+              description="Ensuring the community stays safe, welcoming, and spam-free."
+              crownColor="#f59e0b"
+            />
+
+            {/* Shadow Ezra Card */}
+            <TeamMemberCard
+              username="shadow-ezra"
+              defaultName="Shadow Ezra"
+              role="Moderator"
+              icon={<Shield size={14} />}
+              description="Helping users, managing channels, and keeping the platform organized."
+              crownColor="#f59e0b"
+            />
           </div>
         </article>
       </main>
@@ -90,6 +102,73 @@ export default function AboutPage() {
       <footer className="bg-[#111116] border-t border-softspace-800 mt-12 py-8 text-center text-softspace-400 text-sm">
         <p>© {new Date().getFullYear()} Softspace. Built for the community.</p>
       </footer>
+    </div>
+  );
+}
+
+function TeamMemberCard({ 
+  username, 
+  defaultName, 
+  role, 
+  icon, 
+  description, 
+  crownColor 
+}: { 
+  username: string; 
+  defaultName: string; 
+  role: string; 
+  icon: React.ReactNode; 
+  description: string;
+  crownColor: string;
+}) {
+  const token = useAuthStore(state => state.token);
+  const [user, setUser] = useState<{ displayName?: string | null, avatarUrl?: string | null } | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    api(`/api/users/search?q=${username}`, {}, token)
+      .then(res => res.json())
+      .then(data => {
+        const found = data.users?.find((u: any) => u.username.toLowerCase() === username.toLowerCase());
+        if (found) setUser(found);
+      })
+      .catch(() => {});
+  }, [token, username]);
+
+  const display = user?.displayName || defaultName;
+  const avatar = user?.avatarUrl ? assetUrl(user.avatarUrl) : null;
+  const initial = display.charAt(0).toUpperCase();
+
+  return (
+    <div className="bg-softspace-900 border border-softspace-800 rounded-2xl p-6 relative overflow-hidden group">
+      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+        <Shield size={64} style={{ color: crownColor }} />
+      </div>
+      
+      <div className="flex items-center gap-4 mb-6 relative z-10">
+        <div className="w-16 h-16 bg-[#111116] rounded-full border-2 flex items-center justify-center overflow-hidden" style={{ borderColor: crownColor }}>
+          {avatar ? (
+            <img src={avatar} alt={display} className="w-full h-full object-cover" draggable="false" onContextMenu={(e) => e.preventDefault()} />
+          ) : (
+            <span className="text-xl font-bold text-softspace-400">{initial}</span>
+          )}
+        </div>
+        <div>
+          <h3 className="text-xl font-bold text-white m-0">{display}</h3>
+          <p className="font-medium m-0 flex items-center gap-1.5 mt-1" style={{ color: crownColor }}>
+            {icon} {role}
+          </p>
+        </div>
+      </div>
+      
+      <div className="space-y-3 relative z-10">
+        <div className="flex items-start gap-3">
+          <UserIcon size={18} className="text-softspace-400 shrink-0 mt-1" />
+          <p className="text-softspace-300 text-sm m-0">
+            {description}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

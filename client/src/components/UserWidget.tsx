@@ -72,7 +72,7 @@ export function UserWidget() {
                   );
                 }
                 if (isManualCustomStatus(me.customStatus)) {
-                  return <span className="truncate">{me.customStatus}</span>;
+                  return <span className="truncate">{me.customStatus.replace(/\[\[ce:(?:EMOJI|GIF):([^:\]]+):[^\]]+\]\]/g, ':$1:')}</span>;
                 }
                 return <span className="truncate">{t(`status_${displayStatus}`) || displayStatus}</span>;
               })()}

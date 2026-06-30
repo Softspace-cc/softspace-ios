@@ -24,6 +24,34 @@ function findLatestReleaseFile(dir = getWindowsReleaseDir(), pattern = /^SoftSpa
   return files[0] || null;
 }
 
+router.get('/windows/latest.yml', (_req, res, next) => {
+  try {
+    const filePath = path.join(getWindowsReleaseDir(), 'latest.yml');
+    if (!existsSync(filePath)) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+
+    res.setHeader('Content-Type', 'text/yaml; charset=utf-8');
+    res.sendFile(filePath);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/windows/beta/latest.yml', (_req, res, next) => {
+  try {
+    const filePath = path.join(getWindowsBetaReleaseDir(), 'latest.yml');
+    if (!existsSync(filePath)) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+
+    res.setHeader('Content-Type', 'text/yaml; charset=utf-8');
+    res.sendFile(filePath);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/windows/latest.json', (_req, res, next) => {
   try {
     const fileName = findLatestReleaseFile();
@@ -62,7 +90,7 @@ router.get('/windows/beta/latest.json', (_req, res, next) => {
 router.get('/windows/beta/:file', (req, res, next) => {
   try {
     const fileName = path.basename(req.params.file);
-    if (!/^SoftSpace-Beta-\d+\.\d+\.\d+\.zip$/i.test(fileName)) {
+    if (!/^SoftSpace-Beta-\d+\.\d+\.\d+\.zip$/i.test(fileName) && !/^SoftSpace-Beta-Setup-\d+\.\d+\.\d+\.exe$/i.test(fileName)) {
       return res.status(404).json({ error: 'not_found' });
     }
 
@@ -71,7 +99,11 @@ router.get('/windows/beta/:file', (req, res, next) => {
       return res.status(404).json({ error: 'not_found' });
     }
 
-    res.setHeader('Content-Type', 'application/zip');
+    if (fileName.endsWith('.exe')) {
+      res.setHeader('Content-Type', 'application/x-msdownload');
+    } else {
+      res.setHeader('Content-Type', 'application/zip');
+    }
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.download(filePath, fileName);
   } catch (err) {
@@ -82,7 +114,7 @@ router.get('/windows/beta/:file', (req, res, next) => {
 router.get('/windows/:file', (req, res, next) => {
   try {
     const fileName = path.basename(req.params.file);
-    if (!/^SoftSpace-\d+\.\d+\.\d+\.zip$/i.test(fileName)) {
+    if (!/^SoftSpace-\d+\.\d+\.\d+\.zip$/i.test(fileName) && !/^SoftSpace-Setup-\d+\.\d+\.\d+\.exe$/i.test(fileName)) {
       return res.status(404).json({ error: 'not_found' });
     }
 
@@ -91,7 +123,11 @@ router.get('/windows/:file', (req, res, next) => {
       return res.status(404).json({ error: 'not_found' });
     }
 
-    res.setHeader('Content-Type', 'application/zip');
+    if (fileName.endsWith('.exe')) {
+      res.setHeader('Content-Type', 'application/x-msdownload');
+    } else {
+      res.setHeader('Content-Type', 'application/zip');
+    }
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.download(filePath, fileName);
   } catch (err) {

@@ -1,4 +1,4 @@
-type BadgeId = 'super-gay' | 'kissed-the-ceo' | 'certified-bird';
+type BadgeId = 'super-gay' | 'kissed-the-ceo' | 'certified-bird' | 'moderator';
 
 type BadgeDefinition = {
   id: BadgeId;
@@ -13,6 +13,12 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     label: 'Super Gay',
     icon: '🏳️‍🌈',
     className: 'bg-purple-600',
+  },
+  {
+    id: 'moderator',
+    label: 'Moderator',
+    icon: '🛡️',
+    className: 'bg-blue-500',
   },
   {
     id: 'kissed-the-ceo',
@@ -53,16 +59,18 @@ export function UserBadges({
             className={`flex items-center text-white rounded font-bold uppercase shrink-0 ${
               badge.className
             } ${
-              variant === 'compact' ? 'px-1.5 py-0.5 text-[10px] gap-1' : 'px-2 py-0.5 text-xs gap-1.5'
+              variant === 'compact' ? 'px-1 py-0.5 text-[10px]' : 'px-2 py-0.5 text-xs gap-1.5'
             }`}
             title={badge.label}
           >
             <span aria-hidden="true" className={variant === 'compact' ? 'text-[9px]' : 'text-[10px]'}>
               {badge.icon}
             </span>
-            <span className="leading-none">
-              {badge.label}
-            </span>
+            {variant !== 'compact' && (
+              <span className="leading-none">
+                {badge.label}
+              </span>
+            )}
           </span>
         );
       })}

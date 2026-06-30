@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 import { useAuthStore } from './useAuthStore';
-import { SOCKET_URL } from '../lib/api';
+import { resolveSocketUrl } from '../lib/api';
 import { getClientPlatform } from '../lib/platform';
 
 export type VoiceMember = {
@@ -99,7 +99,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (get().socket) return; // already connected
     const platform = getClientPlatform();
 
-    const socket = io(SOCKET_URL, {
+    const socket = io(resolveSocketUrl(), {
       auth: { token, platform },
       query: { platform },
       transports: ['websocket', 'polling'],

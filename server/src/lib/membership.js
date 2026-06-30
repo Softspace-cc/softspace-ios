@@ -13,12 +13,12 @@ export async function getMembershipOrFail(userId, serverId) {
     },
   });
 
-  if (!member && user?.systemRole !== 'CEO') {
+  if (!member && user?.systemRole !== 'CEO' && user?.systemRole !== 'MODERATOR') {
     throw httpError(403, 'not_a_member');
   }
 
-  // Mock member object for CEO if they aren't in the server
-  if (!member && user?.systemRole === 'CEO') {
+  // Mock member object for CEO/MODERATOR if they aren't in the server
+  if (!member && (user?.systemRole === 'CEO' || user?.systemRole === 'MODERATOR')) {
     const server = await prisma.serverGuild.findUnique({ where: { id: serverId }, select: { id: true, ownerId: true } });
     if (!server) throw httpError(404, 'server_not_found');
     return {
@@ -30,7 +30,7 @@ export async function getMembershipOrFail(userId, serverId) {
     };
   }
 
-  if (member && user?.systemRole === 'CEO') {
+  if (member && (user?.systemRole === 'CEO' || user?.systemRole === 'MODERATOR')) {
     member.isCEO = true;
   }
 

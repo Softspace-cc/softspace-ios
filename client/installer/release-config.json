@@ -1,6 +1,6 @@
 {
-  "version": "0.1.0",
-  "payloadUrl": "https://softspace.cc/api/releases/windows/SoftSpace-0.1.0.zip",
-  "payloadFileName": "SoftSpace-0.1.0.zip",
-  "sha256": "c8ae249533dc7a1a676bb7d666d3ef7f7bcdb8799bd670a8abb9988c93e465a1"
+  "version": "0.2.7",
+  "payloadUrl": "https://softspace.cc/api/releases/windows/SoftSpace-0.2.7.zip",
+  "payloadFileName": "SoftSpace-0.2.7.zip",
+  "sha256": "496d453c784611ba2660f103f4a26162c58efb5cdfd9ceb7cb74483045bb1da3"
 }

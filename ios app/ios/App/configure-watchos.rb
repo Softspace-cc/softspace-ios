@@ -108,15 +108,16 @@ dependency.target_proxy.remote_info = 'WatchApp'
 app_target.dependencies << dependency
 puts "Added dependency: App -> WatchApp"
 
-# 6. Embed WatchApp inside the iOS app bundle
+# 6. Embed WatchApp inside the iOS app bundle at App.app/Watch/
 embed_phase = project.new(Xcodeproj::Project::Object::PBXCopyFilesBuildPhase)
 embed_phase.name = 'Embed Watch Content'
-embed_phase.symbol_dst_subfolder_spec = :products_directory
+embed_phase.dst_subfolder_spec = '16'  # Products Directory
+embed_phase.dst_path = '$(CONTENTS_FOLDER_PATH)/Watch'
 app_target.build_phases << embed_phase
 
 build_file = embed_phase.add_file_reference(watch_target.product_reference)
 build_file.settings = { 'ATTRIBUTES' => ['RemoveHeadersOnCopy'] }
-puts "Configured Embed Watch Content build phase"
+puts "Configured Embed Watch Content build phase (destination: Watch/)"
 
 project.save
 puts "Successfully configured Xcode project for watchOS!"

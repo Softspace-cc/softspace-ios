@@ -99,6 +99,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            VALIDATE_PRODUCT=NO \
             archive -archivePath build/App.xcarchive
 
       - name: Export Unsigned IPA

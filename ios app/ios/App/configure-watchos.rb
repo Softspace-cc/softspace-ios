@@ -40,27 +40,12 @@ end
 # 2. Create the WatchApp target
 watch_target = project.targets.find { |t| t.name == 'WatchApp' }
 if watch_target
-  puts "WatchApp target already exists in project, skipping creation"
+  puts "WatchApp target already exists in project, updating build settings"
 else
   # Create modern watchOS app target (:watch2_app maps to com.apple.product-type.application.watchapp2)
   watch_target = project.new_target(:watch2_app, 'WatchApp', :watchos, '9.0')
   watch_target.product_type = 'com.apple.product-type.application.watchapp2'
   puts "Created WatchApp target successfully"
-  
-  # Configure watch target build settings for both Debug and Release configurations
-  watch_target.build_configurations.each do |config|
-    config.build_settings['SDKROOT'] = 'watchos'
-    config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.softspace.app.watch'
-    config.build_settings['INFOPLIST_FILE'] = 'WatchApp/Info.plist'
-    config.build_settings['WATCHOS_DEPLOYMENT_TARGET'] = '9.0'
-    config.build_settings['GENERATE_INFOPLIST_FILE'] = 'NO'
-    config.build_settings['CURRENT_PROJECT_VERSION'] = '1'
-    config.build_settings['MARKETING_VERSION'] = '1.0'
-    config.build_settings['TARGETED_DEVICE_FAMILY'] = '4' # watch
-    config.build_settings['LD_RUNPATH_SEARCH_PATHS'] = '$(inherited) @executable_path/Frameworks'
-    config.build_settings['SKIP_INSTALL'] = 'YES'
-    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
-  end
 
   # Create physical and virtual group for WatchApp
   watch_group = project.main_group['WatchApp']
@@ -101,6 +86,23 @@ else
   build_file = embed_phase.add_file_reference(watch_target.product_reference)
   build_file.settings = { 'ATTRIBUTES' => ['RemoveHeadersOnCopy'] }
   puts "Configured Embed Watch Content build phase for App target"
+end
+
+# Configure watch target build settings for both Debug and Release configurations
+watch_target.build_configurations.each do |config|
+  config.build_settings['SDKROOT'] = 'watchos'
+  config.build_settings['SUPPORTED_PLATFORMS'] = 'watchos'
+  config.build_settings['SWIFT_VERSION'] = '5.0'
+  config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.softspace.app.watch'
+  config.build_settings['INFOPLIST_FILE'] = 'WatchApp/Info.plist'
+  config.build_settings['WATCHOS_DEPLOYMENT_TARGET'] = '9.0'
+  config.build_settings['GENERATE_INFOPLIST_FILE'] = 'NO'
+  config.build_settings['CURRENT_PROJECT_VERSION'] = '1'
+  config.build_settings['MARKETING_VERSION'] = '1.0'
+  config.build_settings['TARGETED_DEVICE_FAMILY'] = '4' # watch
+  config.build_settings['LD_RUNPATH_SEARCH_PATHS'] = '$(inherited) @executable_path/Frameworks'
+  config.build_settings['SKIP_INSTALL'] = 'YES'
+  config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
 end
 
 project.save
